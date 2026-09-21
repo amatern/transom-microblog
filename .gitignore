@@ -1,0 +1,22 @@
+# Build
+bin/
+obj/
+AppPackages/
+BundleArtifacts/
+*.msix
+*.appx
+*.appinstaller
+# IDE
+.vs/
+*.user
+*.suo
+.vscode/
+.idea/
+# Secrets / certificates
+*.pfx
+*.snk
+secrets.json
+*.env
+# Test output
+TestResults/
+coverage*/
