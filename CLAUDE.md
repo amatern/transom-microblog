@@ -18,11 +18,14 @@ milestone asks for.
 
 ## Commands
 ```powershell
-dotnet restore
+dotnet restore Transom.sln -p:Platform=x64
 dotnet build Transom.sln -c Debug -p:Platform=x64
 dotnet test tests/Transom.Core.Tests
 dotnet format --verify-no-changes
 ```
+Restore and build must use the same `-p:Platform`. A restore without it produces assets that
+the x64 WinUI build can't use (NETSDK1047).
+
 Run the app from Visual Studio 2022+ (Transom.App (Package) profile) or
 `dotnet run --project src/Transom.App -p:Platform=x64`.
 
