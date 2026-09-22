@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Transom.sln
+
+      - name: Build
+        run: dotnet build Transom.sln -c Debug -p:Platform=x64 --no-restore
+
+      - name: Test
+        run: dotnet test tests/Transom.Core.Tests --no-restore
+
+      - name: Format check
+        run: dotnet format Transom.sln --verify-no-changes
+
+  core-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Transom.Core/Transom.Core.csproj tests/Transom.Core.Tests/Transom.Core.Tests.csproj
+
+      - name: Build
+        run: dotnet build src/Transom.Core/Transom.Core.csproj tests/Transom.Core.Tests/Transom.Core.Tests.csproj --no-restore
+
+      - name: Test
+        run: dotnet test tests/Transom.Core.Tests --no-restore
