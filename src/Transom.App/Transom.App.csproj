@@ -24,7 +24,7 @@
       the OS still resolves the Windows App SDK framework package normally via the MSIX package
       dependency graph.
     -->
-    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)'=='Debug'">false</WindowsAppSdkDeploymentManagerInitialize>
   </PropertyGroup>
 
   <ItemGroup>
