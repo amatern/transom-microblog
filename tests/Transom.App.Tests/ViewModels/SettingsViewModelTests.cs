@@ -73,6 +73,12 @@ public class SettingsViewModelTests
         gate.SetResult();
         await verifyTask;
 
+        // The verify succeeded, which clears TokenInput (see
+        // VerifyCommand_OnSuccess_PopulatesProfileAndStoresToken), so CanExecute would be false
+        // again for that reason alone. Re-populate TokenInput to isolate what this test is
+        // actually about: IsVerifying flipping back to false correctly un-forces CanExecute via
+        // [NotifyCanExecuteChangedFor(nameof(VerifyCommand))].
+        vm.TokenInput = "pasted-token";
         Assert.True(vm.VerifyCommand.CanExecute(null));
     }
 

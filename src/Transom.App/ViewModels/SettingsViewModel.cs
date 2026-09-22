@@ -53,6 +53,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             AccountName = account.Name;
             AccountUsername = account.Username;
             AvatarUrl = account.Avatar;
+            TokenInput = string.Empty;
         }
         catch (Exception ex)
         {
