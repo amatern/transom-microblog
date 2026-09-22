@@ -28,6 +28,46 @@ public sealed class MicropubClient
         return config ?? new MicropubConfig();
     }
 
+    public async Task<PublishResult> PublishAsync(string token, PostDraft draft, CancellationToken cancellationToken)
+    {
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("h", "entry"),
+            new("content", draft.Content),
+        };
+        if (!string.IsNullOrEmpty(draft.Title))
+        {
+            form.Add(new("name", draft.Title));
+        }
+        if (draft.PostAsDraft)
+        {
+            form.Add(new("post-status", "draft"));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/micropub")
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        await ThrowIfErrorAsync(response, cancellationToken).ConfigureAwait(false);
+
+        if (response.Headers.Location is { } location)
+        {
+            return new PublishResult(location.ToString(), null);
+        }
+
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var body = await JsonSerializer.DeserializeAsync(stream, TransomJsonContext.Default.PublishResponseBody, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(body?.Url))
+        {
+            throw new MicropubException(response.StatusCode, "Publish succeeded but no post URL was returned.");
+        }
+
+        return new PublishResult(body.Url, body.Preview);
+    }
+
     internal static async Task ThrowIfErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)

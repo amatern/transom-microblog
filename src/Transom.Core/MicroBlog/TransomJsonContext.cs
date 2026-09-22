@@ -8,6 +8,7 @@ namespace Transom.Core.MicroBlog;
 [JsonSerializable(typeof(MicropubConfig))]
 [JsonSerializable(typeof(AccountInfo))]
 [JsonSerializable(typeof(ApiErrorResponse))]
+[JsonSerializable(typeof(PublishResponseBody))]
 public sealed partial class TransomJsonContext : JsonSerializerContext
 {
 }

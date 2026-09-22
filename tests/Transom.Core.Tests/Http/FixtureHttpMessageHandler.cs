@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Transom.Core.Tests.Http;
 
 /// <summary>
@@ -16,9 +18,32 @@ internal sealed class FixtureHttpMessageHandler : HttpMessageHandler
         _respond = respond;
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        LastRequest = request;
-        return Task.FromResult(_respond(request));
+        // Create a copy of the request with buffered content so tests can read it later.
+        var copy = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version,
+            VersionPolicy = request.VersionPolicy,
+        };
+
+        // Copy headers
+        foreach (var header in request.Headers)
+        {
+            copy.Headers.Add(header.Key, header.Value);
+        }
+
+        // Buffer and preserve content
+        if (request.Content is not null)
+        {
+            var content = await request.Content.ReadAsStringAsync(cancellationToken);
+            var contentType = request.Content.Headers.ContentType?.ToString();
+            copy.Content = contentType is not null
+                ? new StringContent(content, Encoding.UTF8, contentType)
+                : new StringContent(content);
+        }
+
+        LastRequest = copy;
+        return _respond(request);
     }
 }
