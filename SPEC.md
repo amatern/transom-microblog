@@ -158,9 +158,29 @@ Base URL `https://micro.blog`. All requests: `Authorization: Bearer <token>`.
 
 ### 6.1 Auth
 - **v1:** user creates an app token at micro.blog → Account → **App tokens** and pastes it.
-- Verify token and fetch profile: `POST /account/verify` (form: `token=<token>`) → name,
-  username, avatar. *(Confirm exact response shape in M1; fall back to `GET /micropub?q=config`
-  as the validity check.)*
+- Verify token and fetch profile — confirmed 2026-09-21 against
+  [help.micro.blog/t/verifying-tokens/102](https://help.micro.blog/t/verifying-tokens/102):
+  `POST /account/verify`, form-encoded body `token=<token>` (no `Authorization` header needed;
+  the token being checked *is* the body param). Also used to exchange a temporary email
+  sign-in token for a permanent one, and apps should call it "on app launch or once every few
+  days" to catch revocation.
+  - Success (`200`):
+    ```json
+    {
+      "token": "HIJKLMNOP",
+      "name": "Manton Reece",
+      "username": "manton",
+      "avatar": "https://micro.blog/manton/avatar.jpg",
+      "default_site": "manton.micro.blog",
+      "expires_at": "..."
+    }
+    ```
+    The returned `token` can differ from the one sent (e.g. a non-expiring token may come back
+    with an expiry once verified) — Transom must store the returned `token`, not just keep the
+    pasted one, and treat `expires_at` as optional/nullable (format unconfirmed).
+  - Error: `{"error": "App token was not valid."}` (status code unconfirmed by docs; M1 treats
+    any non-2xx or an `error` field as invalid and falls back to `GET /micropub?q=config` if
+    `/account/verify` itself is unreachable).
 - **M7:** IndieAuth sign-in with PKCE and a loopback redirect (`http://127.0.0.1:<port>/`),
   system browser, no embedded web view.
 
