@@ -1,0 +1,9 @@
+* text=auto
+*.sh   text eol=lf
+*.cs   text diff=csharp
+*.sln  text eol=crlf
+*.slnx text eol=crlf
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.pfx  binary
