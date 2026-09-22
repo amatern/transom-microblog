@@ -162,6 +162,7 @@ Base URL `https://micro.blog`. All requests: `Authorization: Bearer <token>`.
 
 ### 6.1 Auth
 - **v1:** user creates an app token at micro.blog → Account → **App tokens** and pastes it.
+  - Scope required: **Read and write** (not "Read only" or "Create content"), since M3+ reads the timeline.
 - Verify token and fetch profile — confirmed 2026-09-21 against
   [help.micro.blog/t/verifying-tokens/102](https://help.micro.blog/t/verifying-tokens/102):
   `POST /account/verify`, form-encoded body `token=<token>` (no `Authorization` header needed;
