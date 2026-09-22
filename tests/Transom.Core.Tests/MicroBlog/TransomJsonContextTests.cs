@@ -37,6 +37,17 @@ public class TransomJsonContextTests
     }
 
     [Fact]
+    public void MicropubConfig_MissingDestination_DefaultsToEmpty()
+    {
+        using var stream = FixtureFile.OpenRead("config-no-blogs.json");
+
+        var config = JsonSerializer.Deserialize(stream, TransomJsonContext.Default.MicropubConfig);
+
+        Assert.NotNull(config);
+        Assert.Empty(config!.Destinations);
+    }
+
+    [Fact]
     public void AccountInfo_DeserializesVerifySuccess()
     {
         using var stream = FixtureFile.OpenRead("verify-success.json");
