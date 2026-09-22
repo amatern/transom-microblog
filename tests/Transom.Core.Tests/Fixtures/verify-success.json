@@ -1,0 +1,8 @@
+{
+  "token": "HIJKLMNOP",
+  "name": "Test User",
+  "username": "testuser",
+  "avatar": "https://micro.blog/testuser/avatar.jpg",
+  "default_site": "testuser.micro.blog",
+  "expires_at": null
+}

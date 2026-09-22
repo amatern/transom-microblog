@@ -1,0 +1,10 @@
+{
+  "media-endpoint": "https://micro.blog/micropub/media",
+  "destination": [
+    {
+      "uid": "https://example.micro.blog/",
+      "name": "example.micro.blog",
+      "microblog-title": "Example Blog"
+    }
+  ]
+}
