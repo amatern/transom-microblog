@@ -85,6 +85,10 @@ Small, always-on-top window (text + image + Publish). Opened from tray icon or g
 Account(s) and sign-out, default blog, hotkey, image settings (max dimension, JPEG quality,
 strip metadata — on by default), poll interval, theme, start with Windows, minimize to tray.
 
+- **Post as draft (safe testing)** — sends `post-status=draft` instead of publishing live;
+  Debug builds default this on so manual smoke testing never creates public posts. Toggle it
+  off to test a real publish.
+
 ### 4.5 Accessibility and polish
 All actions keyboard-reachable; `AutomationProperties.Name` on every control; high-contrast
 works; respects system text scaling; Mica backdrop; light/dark follows system.
