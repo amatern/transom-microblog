@@ -10,12 +10,13 @@
     <Page.Resources>
         <converters:NullToBoolConverter x:Key="NullToBoolConverter" />
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+        <converters:UrlToImageSourceConverter x:Key="UrlToImageSourceConverter" />
     </Page.Resources>
     <StackPanel Padding="24" Spacing="12" MaxWidth="480" HorizontalAlignment="Left">
         <TextBlock Text="Micro.blog account" Style="{StaticResource SubtitleTextBlockStyle}" />
 
         <StackPanel Orientation="Horizontal" Spacing="12" Visibility="{x:Bind ViewModel.AccountUsername, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
-            <PersonPicture ProfilePicture="{x:Bind ViewModel.AvatarUrl, Mode=OneWay}" Width="40" Height="40" />
+            <PersonPicture ProfilePicture="{x:Bind ViewModel.AvatarUrl, Mode=OneWay, Converter={StaticResource UrlToImageSourceConverter}}" Width="40" Height="40" />
             <StackPanel>
                 <TextBlock Text="{x:Bind ViewModel.AccountName, Mode=OneWay}" FontWeight="SemiBold" />
                 <TextBlock Text="{x:Bind ViewModel.AccountUsername, Mode=OneWay}" Opacity="0.7" />

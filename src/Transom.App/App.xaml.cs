@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
@@ -31,6 +33,18 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+    }
+
+    /// <summary>Logs unhandled exceptions before the default crash behavior runs. Does not set
+    /// <see cref="Microsoft.UI.Xaml.UnhandledExceptionEventArgs.Handled"/> — this only adds visibility, it never
+    /// swallows the exception.</summary>
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+#if DEBUG
+        System.Diagnostics.Debug.WriteLine(e.Exception.ToString());
+#endif
+        Host?.Services.GetService<ILogger<App>>()?.LogError(e.Exception, "Unhandled exception");
     }
 
     /// <summary>
