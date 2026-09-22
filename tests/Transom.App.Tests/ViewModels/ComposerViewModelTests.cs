@@ -1,5 +1,6 @@
 using Transom.App.Tests.TestDoubles;
 using Transom.App.ViewModels;
+using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
 
@@ -49,7 +50,7 @@ public class ComposerViewModelTests
             await gate.Task;
             return new PublishResult("https://example.micro.blog/post.html", null);
         };
-        var vm = new ComposerViewModel(provider, new FakeComposerSettings()) { Text = "Hello" };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
 
         var publishTask = vm.PublishCommand.ExecuteAsync(null);
         Assert.False(vm.PublishCommand.CanExecute(null));
@@ -72,7 +73,7 @@ public class ComposerViewModelTests
         {
             OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.Unauthorized, "App token was not valid."),
         };
-        var vm = new ComposerViewModel(provider, new FakeComposerSettings()) { Text = "Don't lose me" };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Don't lose me" };
 
         await vm.PublishCommand.ExecuteAsync(null);
 
@@ -85,7 +86,7 @@ public class ComposerViewModelTests
     public async Task PublishCommand_OnSuccess_ClearsTextAndSetsPublishedUrl()
     {
         var provider = new FakeBlogProvider();
-        var vm = new ComposerViewModel(provider, new FakeComposerSettings()) { Text = "Hello, world!" };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello, world!" };
 
         await vm.PublishCommand.ExecuteAsync(null);
 
@@ -99,12 +100,48 @@ public class ComposerViewModelTests
     {
         var provider = new FakeBlogProvider();
         var settings = new FakeComposerSettings { PostAsDraft = true };
-        var vm = new ComposerViewModel(provider, settings) { Text = "Hello" };
+        var vm = new ComposerViewModel(provider, settings, SignedInCredentialStore()) { Text = "Hello" };
 
         await vm.PublishCommand.ExecuteAsync(null);
 
         Assert.True(provider.LastDraft!.PostAsDraft);
     }
 
-    private static ComposerViewModel BuildViewModel() => new(new FakeBlogProvider(), new FakeComposerSettings());
+    [Fact]
+    public void ShowSignInHint_True_WhenNoTokenStored()
+    {
+        var vm = new ComposerViewModel(new FakeBlogProvider(), new FakeComposerSettings(), new InMemoryCredentialStore());
+
+        Assert.True(vm.ShowSignInHint);
+        Assert.False(vm.IsSignedIn);
+    }
+
+    [Fact]
+    public void ShowSignInHint_False_WhenTokenStored()
+    {
+        var vm = new ComposerViewModel(new FakeBlogProvider(), new FakeComposerSettings(), SignedInCredentialStore());
+
+        Assert.False(vm.ShowSignInHint);
+        Assert.True(vm.IsSignedIn);
+    }
+
+    [Fact]
+    public void PublishCommand_Disabled_WhenNotSignedIn_EvenWithText()
+    {
+        var vm = new ComposerViewModel(new FakeBlogProvider(), new FakeComposerSettings(), new InMemoryCredentialStore())
+        {
+            Text = "Hello",
+        };
+
+        Assert.False(vm.PublishCommand.CanExecute(null));
+    }
+
+    private static ComposerViewModel BuildViewModel() => new(new FakeBlogProvider(), new FakeComposerSettings(), SignedInCredentialStore());
+
+    private static InMemoryCredentialStore SignedInCredentialStore()
+    {
+        var store = new InMemoryCredentialStore();
+        store.Save(CredentialAccounts.Default, "test-token");
+        return store;
+    }
 }

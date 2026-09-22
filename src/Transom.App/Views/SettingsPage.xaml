@@ -23,6 +23,12 @@
             </StackPanel>
         </StackPanel>
 
+        <Button
+            Content="Sign out"
+            AutomationProperties.Name="Sign out"
+            Command="{x:Bind ViewModel.SignOutCommand}"
+            Visibility="{x:Bind ViewModel.IsSignedIn, Mode=OneWay}" />
+
         <TextBox
             PlaceholderText="Paste your Micro.blog app token"
             AutomationProperties.Name="App token"

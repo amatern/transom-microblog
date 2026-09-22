@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using Transom.App.Services;
+using Transom.Core.Credentials;
 using Transom.Core.Models;
 using Transom.Core.Providers;
 
@@ -41,13 +42,18 @@ public sealed partial class ComposerViewModel : ObservableObject
 
     public bool ShowTitleField => Text.Length > TitleThreshold;
 
-    public ComposerViewModel(IBlogProvider provider, IComposerSettings settings)
+    public bool IsSignedIn { get; }
+
+    public bool ShowSignInHint => !IsSignedIn;
+
+    public ComposerViewModel(IBlogProvider provider, IComposerSettings settings, ICredentialStore credentialStore)
     {
         _provider = provider;
         _settings = settings;
+        IsSignedIn = credentialStore.TryGet(CredentialAccounts.Default) is not null;
     }
 
-    private bool CanPublish() => !IsPublishing && !string.IsNullOrWhiteSpace(Text);
+    private bool CanPublish() => !IsPublishing && !string.IsNullOrWhiteSpace(Text) && IsSignedIn;
 
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private async Task PublishAsync(CancellationToken cancellationToken)

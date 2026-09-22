@@ -23,5 +23,6 @@ public sealed partial class SettingsPage : Page
         ViewModel = App.Host.Services.GetRequiredService<SettingsViewModel>();
         _composerSettings = App.Host.Services.GetRequiredService<IComposerSettings>();
         InitializeComponent();
+        Loaded += (_, _) => ViewModel.LoadCommand.Execute(null);
     }
 }
