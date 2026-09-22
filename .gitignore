@@ -20,3 +20,5 @@ secrets.json
 # Test output
 TestResults/
 coverage*/
+# Local working notes and prompts (not published)
+docs/scratch/
