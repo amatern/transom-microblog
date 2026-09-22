@@ -87,6 +87,12 @@ dotnet_code_quality_unused_parameters = all:suggestion
 # Suppression preferences
 dotnet_remove_unnecessary_suppression_exclusions = none
 
+# CLAUDE.md Rule 5 mandates field-backed [ObservableProperty] (not partial properties). The
+# CommunityToolkit.Mvvm 8.4 analyzer's suggested code fix for this has no Fix All action, which
+# makes `dotnet format --verify-no-changes` never converge on WinUI-targeting projects. Since the
+# field-backed form is the deliberate house style, silence the suggestion instead of chasing it.
+dotnet_diagnostic.MVVMTK0045.severity = silent
+
 #### C# Coding Conventions ####
 [*.cs]
 
