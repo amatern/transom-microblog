@@ -33,6 +33,23 @@
             Grid.Row="1"
             AutomationProperties.Name="Main navigation"
             IsBackButtonVisible="Collapsed"
-            IsPaneToggleButtonVisible="False" />
+            IsPaneToggleButtonVisible="False"
+            ItemInvoked="NavView_ItemInvoked">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="New post" Tag="Composer" AutomationProperties.Name="New post">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Add" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Content="Settings" Tag="Settings" AutomationProperties.Name="Settings">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Setting" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
     </Grid>
 </Window>

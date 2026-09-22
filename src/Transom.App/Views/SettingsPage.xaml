@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Transom.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:Transom.App.Converters"
+    mc:Ignorable="d">
+    <Page.Resources>
+        <converters:NullToBoolConverter x:Key="NullToBoolConverter" />
+    </Page.Resources>
+    <StackPanel Padding="24" Spacing="12" MaxWidth="480" HorizontalAlignment="Left">
+        <TextBlock Text="Micro.blog account" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="12" Visibility="{x:Bind ViewModel.AccountUsername, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}">
+            <PersonPicture ProfilePicture="{x:Bind ViewModel.AvatarUrl, Mode=OneWay}" Width="40" Height="40" />
+            <StackPanel>
+                <TextBlock Text="{x:Bind ViewModel.AccountName, Mode=OneWay}" FontWeight="SemiBold" />
+                <TextBlock Text="{x:Bind ViewModel.AccountUsername, Mode=OneWay}" Opacity="0.7" />
+            </StackPanel>
+        </StackPanel>
+
+        <TextBox
+            PlaceholderText="Paste your Micro.blog app token"
+            AutomationProperties.Name="App token"
+            Text="{x:Bind ViewModel.TokenInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button
+                Content="Verify"
+                AutomationProperties.Name="Verify app token"
+                Command="{x:Bind ViewModel.VerifyCommand}" />
+            <ProgressRing IsActive="{x:Bind ViewModel.IsVerifying, Mode=OneWay}" Width="20" Height="20" />
+        </StackPanel>
+
+        <InfoBar
+            IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+            Severity="Error"
+            Title="Couldn't verify"
+            Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
+
+        <ToggleSwitch
+            Header="Post as draft (safe testing)"
+            AutomationProperties.Name="Post as draft"
+            IsOn="{x:Bind PostAsDraft, Mode=TwoWay}" />
+    </StackPanel>
+</Page>

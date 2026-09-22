@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Transom.App.Views.ComposerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:Transom.App.Converters"
+    mc:Ignorable="d">
+    <Page.Resources>
+        <converters:NullToBoolConverter x:Key="NullToBoolConverter" />
+    </Page.Resources>
+    <Grid Padding="24">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="Enter" Modifiers="Control" Invoked="PublishAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBox
+            x:Name="TitleBox"
+            Grid.Row="0"
+            Margin="0,0,0,8"
+            PlaceholderText="Title"
+            AutomationProperties.Name="Post title"
+            Text="{x:Bind ViewModel.Title, Mode=TwoWay}"
+            Visibility="{x:Bind ViewModel.ShowTitleField, Mode=OneWay}" />
+
+        <TextBox
+            Grid.Row="1"
+            AcceptsReturn="True"
+            TextWrapping="Wrap"
+            PlaceholderText="What's on your mind?"
+            AutomationProperties.Name="Post text"
+            Text="{x:Bind ViewModel.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock
+            Grid.Row="2"
+            Margin="0,8,0,8"
+            HorizontalAlignment="Right"
+            Opacity="0.7"
+            Text="{x:Bind ViewModel.CharacterCount, Mode=OneWay}" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="12">
+            <Button
+                Content="Publish"
+                AutomationProperties.Name="Publish post"
+                Command="{x:Bind ViewModel.PublishCommand}" />
+            <ProgressRing IsActive="{x:Bind ViewModel.IsPublishing, Mode=OneWay}" Width="20" Height="20" />
+        </StackPanel>
+
+        <InfoBar
+            Grid.Row="3"
+            Margin="0,48,0,0"
+            IsOpen="{x:Bind ViewModel.PublishedUrl, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+            Severity="Success"
+            Title="Published"
+            Message="{x:Bind ViewModel.PublishedUrl, Mode=OneWay}" />
+
+        <InfoBar
+            Grid.Row="3"
+            Margin="0,48,0,0"
+            IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+            Severity="Error"
+            Title="Couldn't publish"
+            Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}">
+            <InfoBar.ActionButton>
+                <Button Content="Retry" AutomationProperties.Name="Retry publish" Command="{x:Bind ViewModel.PublishCommand}" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+    </Grid>
+</Page>
