@@ -1,4 +1,5 @@
-﻿using Microsoft.UI.Xaml;
+﻿using Microsoft.Extensions.Hosting;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
@@ -18,6 +19,12 @@ public partial class App : Application
     private Window? _window;
 
     /// <summary>
+    /// The application's dependency injection container and hosted services, started in
+    /// <see cref="OnLaunched"/>.
+    /// </summary>
+    public static IHost Host { get; private set; } = null!;
+
+    /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
     /// executed, and as such is the logical equivalent of main() or WinMain().
     /// </summary>
@@ -32,6 +39,10 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
+            .ConfigureTransomServices()
+            .Build();
+
         _window = new MainWindow();
         _window.Activate();
     }
