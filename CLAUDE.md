@@ -29,6 +29,12 @@ the x64 WinUI build can't use (NETSDK1047).
 Run the app from Visual Studio 2022+ (Transom.App (Package) profile) or
 `dotnet run --project src/Transom.App -p:Platform=x64`.
 
+Transom.App must have `Deploy.0` in every solution config, or F5 fails with "needs to be
+deployed". Keep it when regenerating or editing the .sln.
+
+Don't keep the working copy in a synced folder (Dropbox/OneDrive): sync locks `bin\…\AppX`
+and deploy fails with DEP0500.
+
 ## Rules
 1. **Never log, print, persist or commit tokens.** Tokens live in `PasswordVault` only.
    The logging handler redacts `Authorization`. Test tokens are obviously fake (`test-token`).
