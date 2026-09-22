@@ -1,10 +1,10 @@
 using System.Net;
 using System.Text;
 
+using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
 using Transom.Core.Providers.MicroBlog;
-using Transom.Core.Tests.Credentials;
 using Transom.Core.Tests.Fixtures;
 using Transom.Core.Tests.Http;
 

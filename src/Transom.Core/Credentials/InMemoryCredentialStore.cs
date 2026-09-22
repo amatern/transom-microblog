@@ -1,8 +1,8 @@
-using Transom.Core.Credentials;
+namespace Transom.Core.Credentials;
 
-namespace Transom.Core.Tests.Credentials;
-
-internal sealed class InMemoryCredentialStore : ICredentialStore
+/// <summary>A non-persistent <see cref="ICredentialStore"/>, used by tests and available as a
+/// fallback if no platform-specific store is registered.</summary>
+public sealed class InMemoryCredentialStore : ICredentialStore
 {
     private readonly Dictionary<string, string> _tokens = [];
 
