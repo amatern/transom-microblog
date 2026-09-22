@@ -4,19 +4,15 @@ Each milestone is shippable and sized for a few focused Claude Code sessions. Ea
 should become one GitHub issue and one PR. Story IDs (U#) refer to `SPEC.md` §3.
 
 ## M0 — Scaffold and CI
-> DI host and Authorization-redacting logging are done; `TransomJsonContext` is
-> deferred to M1, created alongside the first real response DTO — an empty
-> `JsonSerializerContext` with no `[JsonSerializable]` types does not compile
-> (source generator requires at least one).
-
 - [x] Solution with `Transom.Core`, `Transom.App` (WinUI 3 packaged), `Transom.Core.Tests`
-- [ ] DI host, logging with Authorization redaction, `TransomJsonContext`
+- [x] DI host, logging with Authorization redaction
 - [x] `.editorconfig`, nullable on, warnings-as-errors in Core
 - [x] GitHub Actions: build + test on `windows-latest`, Core tests on `ubuntu-latest`
 - [x] Empty `NavigationView` shell with Mica, light/dark
 **Done when:** CI is green and the app opens to an empty shell.
 
 ## M1 — Sign in and text post (U1, U2)
+- [ ] `TransomJsonContext` (source-generated) with the first real DTOs
 - [ ] `ICredentialStore` + `PasswordVault` implementation
 - [ ] Settings → paste app token → verify (`/account/verify` or `q=config`) → show avatar/name
 - [ ] `MicropubClient.GetConfigAsync`, `PublishAsync` (text + optional title)
