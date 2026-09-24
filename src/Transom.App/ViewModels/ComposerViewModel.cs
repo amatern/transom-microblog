@@ -1,11 +1,8 @@
-using System.Net;
-
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using Transom.App.Services;
 using Transom.Core.Credentials;
-using Transom.Core.MicroBlog;
 using Transom.Core.Models;
 using Transom.Core.Providers;
 
@@ -100,20 +97,9 @@ public sealed partial class ComposerViewModel : ObservableObject
             Text = string.Empty;
             Title = string.Empty;
         }
-        catch (MicropubException ex) when (ex.StatusCode is null)
-        {
-            // No response ever came back (DNS failure, no connection, timeout) — MicropubClient
-            // wraps that into a MicropubException with a null StatusCode so it can't reach here as
-            // a raw HttpRequestException/TaskCanceledException and escape uncaught.
-            ErrorMessage = "You appear to be offline. Check your connection and try again.";
-        }
-        catch (MicropubException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            ErrorMessage = "Your app token was rejected. Paste a new one in Settings.";
-        }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = ComposerErrorMessages.Describe(ex);
         }
         finally
         {
