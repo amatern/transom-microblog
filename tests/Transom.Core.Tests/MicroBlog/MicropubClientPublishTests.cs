@@ -147,7 +147,7 @@ public class MicropubClientPublishTests
 
         var form = await handler.LastRequest!.Content!.ReadAsStringAsync();
         Assert.Equal(
-            "h=entry&content=Two+photos&photo=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Fone.jpg&mp-photo-alt=A+red+bicycle&photo=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Ftwo.jpg&mp-photo-alt=",
+            "h=entry&content=Two+photos&photo%5B%5D=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Fone.jpg&mp-photo-alt%5B%5D=A+red+bicycle&photo%5B%5D=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Ftwo.jpg&mp-photo-alt%5B%5D=",
             form);
     }
 

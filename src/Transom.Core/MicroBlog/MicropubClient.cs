@@ -46,8 +46,8 @@ public sealed class MicropubClient
         }
         foreach (var image in draft.Images)
         {
-            form.Add(new("photo", image.Url));
-            form.Add(new("mp-photo-alt", image.AltText ?? string.Empty));
+            form.Add(new("photo[]", image.Url));
+            form.Add(new("mp-photo-alt[]", image.AltText ?? string.Empty));
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/micropub")
