@@ -1,5 +1,6 @@
 using System.Net;
 
+using Transom.App.Services;
 using Transom.App.ViewModels;
 using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
@@ -11,7 +12,7 @@ public class SettingsViewModelTests
     [Fact]
     public void VerifyCommand_Disabled_WhenTokenInputEmpty()
     {
-        var vm = new SettingsViewModel(BuildAccountClient(_ => throw new InvalidOperationException()), new InMemoryCredentialStore());
+        var vm = new SettingsViewModel(BuildAccountClient(_ => throw new InvalidOperationException()), new InMemoryCredentialStore(), new AccountStateService());
 
         vm.TokenInput = string.Empty;
 
@@ -24,16 +25,17 @@ public class SettingsViewModelTests
         var credentialStore = new InMemoryCredentialStore();
         var vm = new SettingsViewModel(
             BuildAccountClient(token => Task.FromResult(new Transom.Core.Models.AccountInfo(token + "-verified", "Test User", "testuser", "https://micro.blog/testuser/avatar.jpg", "testuser.micro.blog", null))),
-            credentialStore)
+            credentialStore,
+            new AccountStateService())
         {
             TokenInput = "pasted-token",
         };
 
         await vm.VerifyCommand.ExecuteAsync(null);
 
-        Assert.Equal("Test User", vm.AccountName);
-        Assert.Equal("testuser", vm.AccountUsername);
-        Assert.Equal("https://micro.blog/testuser/avatar.jpg", vm.AvatarUrl);
+        Assert.Equal("Test User", vm.Account.AccountName);
+        Assert.Equal("testuser", vm.Account.AccountUsername);
+        Assert.Equal("https://micro.blog/testuser/avatar.jpg", vm.Account.AvatarUrl);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal("pasted-token-verified", credentialStore.TryGet(CredentialAccounts.Default));
     }
@@ -44,7 +46,8 @@ public class SettingsViewModelTests
         var credentialStore = new InMemoryCredentialStore();
         var vm = new SettingsViewModel(
             BuildAccountClient(_ => throw new MicropubException(HttpStatusCode.Unauthorized, "App token was not valid.")),
-            credentialStore)
+            credentialStore,
+            new AccountStateService())
         {
             TokenInput = "bad-token",
         };
@@ -53,7 +56,7 @@ public class SettingsViewModelTests
 
         Assert.Equal("App token was not valid.", vm.ErrorMessage);
         Assert.Null(credentialStore.TryGet(CredentialAccounts.Default));
-        Assert.Null(vm.AccountName);
+        Assert.Null(vm.Account.AccountName);
     }
 
     [Fact]
@@ -62,7 +65,8 @@ public class SettingsViewModelTests
         var gate = new TaskCompletionSource();
         var vm = new SettingsViewModel(
             BuildAccountClient(async token => { await gate.Task; return new Transom.Core.Models.AccountInfo(token, "Test User", "testuser", null, null, null); }),
-            new InMemoryCredentialStore())
+            new InMemoryCredentialStore(),
+            new AccountStateService())
         {
             TokenInput = "pasted-token",
         };
@@ -89,14 +93,15 @@ public class SettingsViewModelTests
         credentialStore.Save(CredentialAccounts.Default, "stored-token");
         var vm = new SettingsViewModel(
             BuildAccountClient(token => Task.FromResult(new Transom.Core.Models.AccountInfo(token + "-verified", "Test User", "testuser", "https://micro.blog/testuser/avatar.jpg", "testuser.micro.blog", null))),
-            credentialStore);
+            credentialStore,
+            new AccountStateService());
 
         await vm.LoadCommand.ExecuteAsync(null);
 
-        Assert.Equal("Test User", vm.AccountName);
-        Assert.Equal("testuser", vm.AccountUsername);
-        Assert.Equal("https://micro.blog/testuser/avatar.jpg", vm.AvatarUrl);
-        Assert.True(vm.IsSignedIn);
+        Assert.Equal("Test User", vm.Account.AccountName);
+        Assert.Equal("testuser", vm.Account.AccountUsername);
+        Assert.Equal("https://micro.blog/testuser/avatar.jpg", vm.Account.AvatarUrl);
+        Assert.True(vm.Account.IsSignedIn);
         Assert.Null(vm.ErrorMessage);
     }
 
@@ -110,13 +115,14 @@ public class SettingsViewModelTests
                 verifyCalled = true;
                 throw new InvalidOperationException("Verify should not be called when there is no stored token.");
             }),
-            new InMemoryCredentialStore());
+            new InMemoryCredentialStore(),
+            new AccountStateService());
 
         await vm.LoadCommand.ExecuteAsync(null);
 
         Assert.False(verifyCalled);
-        Assert.Null(vm.AccountUsername);
-        Assert.False(vm.IsSignedIn);
+        Assert.Null(vm.Account.AccountUsername);
+        Assert.False(vm.Account.IsSignedIn);
     }
 
     [Fact]
@@ -126,13 +132,14 @@ public class SettingsViewModelTests
         credentialStore.Save(CredentialAccounts.Default, "stale-token");
         var vm = new SettingsViewModel(
             BuildAccountClient(_ => throw new MicropubException(HttpStatusCode.Unauthorized, "App token was not valid.")),
-            credentialStore);
+            credentialStore,
+            new AccountStateService());
 
         await vm.LoadCommand.ExecuteAsync(null);
 
         Assert.Equal("Couldn't verify your saved token", vm.ErrorMessage);
         Assert.Equal("stale-token", credentialStore.TryGet(CredentialAccounts.Default));
-        Assert.Null(vm.AccountUsername);
+        Assert.Null(vm.Account.AccountUsername);
     }
 
     [Fact]
@@ -140,20 +147,17 @@ public class SettingsViewModelTests
     {
         var credentialStore = new InMemoryCredentialStore();
         credentialStore.Save(CredentialAccounts.Default, "stored-token");
-        var vm = new SettingsViewModel(BuildAccountClient(_ => throw new InvalidOperationException()), credentialStore)
-        {
-            AccountName = "Test User",
-            AccountUsername = "testuser",
-            AvatarUrl = "https://micro.blog/testuser/avatar.jpg",
-        };
+        var account = new AccountStateService();
+        account.SetProfile(new Transom.Core.Models.AccountInfo("stored-token", "Test User", "testuser", "https://micro.blog/testuser/avatar.jpg", null, null));
+        var vm = new SettingsViewModel(BuildAccountClient(_ => throw new InvalidOperationException()), credentialStore, account);
 
         vm.SignOutCommand.Execute(null);
 
         Assert.Null(credentialStore.TryGet(CredentialAccounts.Default));
-        Assert.Null(vm.AccountName);
-        Assert.Null(vm.AccountUsername);
-        Assert.Null(vm.AvatarUrl);
-        Assert.False(vm.IsSignedIn);
+        Assert.Null(vm.Account.AccountName);
+        Assert.Null(vm.Account.AccountUsername);
+        Assert.Null(vm.Account.AvatarUrl);
+        Assert.False(vm.Account.IsSignedIn);
     }
 
     private static AccountClient BuildAccountClient(Func<string, Task<Transom.Core.Models.AccountInfo>> verify)
@@ -186,7 +190,7 @@ public class SettingsViewModelTests
             }
             catch (MicropubException ex)
             {
-                return new HttpResponseMessage(ex.StatusCode)
+                return new HttpResponseMessage(ex.StatusCode ?? HttpStatusCode.InternalServerError)
                 {
                     Content = System.Net.Http.Json.JsonContent.Create(new Transom.Core.Models.ApiErrorResponse(ex.Message), Transom.Core.MicroBlog.TransomJsonContext.Default.ApiErrorResponse),
                 };

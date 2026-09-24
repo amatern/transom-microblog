@@ -44,6 +44,12 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
             <NavigationView.FooterMenuItems>
+                <NavigationViewItem x:Name="AccountFooterItem" Tag="Settings">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PersonPicture x:Name="AccountFooterAvatar" Width="24" Height="24" />
+                        <TextBlock x:Name="AccountFooterName" VerticalAlignment="Center" />
+                    </StackPanel>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Settings" Tag="Settings" AutomationProperties.Name="Settings">
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Setting" />

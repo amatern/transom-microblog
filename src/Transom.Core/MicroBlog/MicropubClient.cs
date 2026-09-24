@@ -20,7 +20,7 @@ public sealed class MicropubClient
         using var request = new HttpRequestMessage(HttpMethod.Get, "/micropub?q=config");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
         await ThrowIfErrorAsync(response, cancellationToken).ConfigureAwait(false);
 
         var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -50,7 +50,7 @@ public sealed class MicropubClient
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
         await ThrowIfErrorAsync(response, cancellationToken).ConfigureAwait(false);
 
         // Read the body even when a Location header is present: SPEC.md §6.2 documents Location as
@@ -70,6 +70,31 @@ public sealed class MicropubClient
         }
 
         return new PublishResult(url, body?.Preview);
+    }
+
+    /// <summary>
+    /// Sends the request and translates connectivity failures (no route to host, DNS failure,
+    /// timeout) into <see cref="MicropubException"/> with a null <c>StatusCode</c>, so callers only
+    /// ever handle one exception type for Micro.blog failures instead of also having to catch
+    /// <see cref="HttpRequestException"/>/<see cref="TaskCanceledException"/> separately. A
+    /// <see cref="TaskCanceledException"/> caused by the caller's own
+    /// <paramref name="cancellationToken"/> is left alone: that is a deliberate cancellation, not a
+    /// failure to report.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new MicropubException(null, ex.Message, ex);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MicropubException(null, "The request timed out.", ex);
+        }
     }
 
     internal static async Task ThrowIfErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)

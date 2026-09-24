@@ -66,4 +66,38 @@ public class MicropubClientGetConfigTests
 
         Assert.Equal(HttpStatusCode.InternalServerError, ex.StatusCode);
     }
+
+    [Fact]
+    public async Task GetConfigAsync_NoRouteToHost_ThrowsMicropubExceptionWithNullStatusCode()
+    {
+        var handler = new ThrowingHttpMessageHandler(() => new HttpRequestException("No such host is known. (micro.blog:443)"));
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        var ex = await Assert.ThrowsAsync<MicropubException>(() => client.GetConfigAsync("test-token", CancellationToken.None));
+
+        Assert.Null(ex.StatusCode);
+        Assert.DoesNotContain("test-token", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_Timeout_ThrowsMicropubExceptionWithNullStatusCode()
+    {
+        var handler = new ThrowingHttpMessageHandler(() => new TaskCanceledException("The request timed out.", new TimeoutException()));
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        var ex = await Assert.ThrowsAsync<MicropubException>(() => client.GetConfigAsync("test-token", CancellationToken.None));
+
+        Assert.Null(ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_CallerCancels_ThrowsTaskCanceledException_NotMicropubException()
+    {
+        var handler = new ThrowingHttpMessageHandler(() => new TaskCanceledException());
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<TaskCanceledException>(() => client.GetConfigAsync("test-token", cts.Token));
+    }
 }

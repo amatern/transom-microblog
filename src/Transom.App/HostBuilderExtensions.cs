@@ -41,6 +41,7 @@ internal static class HostBuilderExtensions
 
             services.AddSingleton<ICredentialStore, PasswordVaultCredentialStore>();
             services.AddSingleton<IComposerSettings, LocalSettingsComposerSettings>();
+            services.AddSingleton<AccountStateService>();
             services.AddTransient<IBlogProvider>(sp => new MicroBlogProvider(
                 sp.GetRequiredService<MicropubClient>(),
                 sp.GetRequiredService<ICredentialStore>(),

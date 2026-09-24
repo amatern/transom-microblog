@@ -30,7 +30,7 @@
             AutomationProperties.Name="Post title"
             Text="{x:Bind ViewModel.Title, Mode=TwoWay}"
             Visibility="{x:Bind ViewModel.ShowTitleField, Mode=OneWay}"
-            KeyDown="ComposerTextBox_KeyDown" />
+            PreviewKeyDown="ComposerTextBox_PreviewKeyDown" />
 
         <TextBox
             x:Name="BodyBox"
@@ -40,7 +40,7 @@
             PlaceholderText="What's on your mind?"
             AutomationProperties.Name="Post text"
             Text="{x:Bind ViewModel.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            KeyDown="ComposerTextBox_KeyDown" />
+            PreviewKeyDown="ComposerTextBox_PreviewKeyDown" />
 
         <TextBlock
             Grid.Row="2"

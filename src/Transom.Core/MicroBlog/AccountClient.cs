@@ -53,5 +53,5 @@ public sealed class AccountClient
         return account ?? throw new MicropubException(response.StatusCode, "Verify response was empty.");
     }
 
-    private static bool IsServerError(Exception ex) => ex is MicropubException { StatusCode: var status } && (int)status >= 500;
+    private static bool IsServerError(Exception ex) => ex is MicropubException { StatusCode: { } status } && (int)status >= 500;
 }

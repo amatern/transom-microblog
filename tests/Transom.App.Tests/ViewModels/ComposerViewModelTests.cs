@@ -71,6 +71,22 @@ public class ComposerViewModelTests
     {
         var provider = new FakeBlogProvider
         {
+            OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.InternalServerError, "Something went wrong."),
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Don't lose me" };
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Equal("Don't lose me", vm.Text);
+        Assert.Equal("Something went wrong.", vm.ErrorMessage);
+        Assert.Null(vm.PublishedUrl);
+    }
+
+    [Fact]
+    public async Task PublishCommand_OnUnauthorized_ShowsTokenRejectedMessage_NotTheServerText()
+    {
+        var provider = new FakeBlogProvider
+        {
             OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.Unauthorized, "App token was not valid."),
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Don't lose me" };
@@ -78,8 +94,29 @@ public class ComposerViewModelTests
         await vm.PublishCommand.ExecuteAsync(null);
 
         Assert.Equal("Don't lose me", vm.Text);
-        Assert.Equal("App token was not valid.", vm.ErrorMessage);
-        Assert.Null(vm.PublishedUrl);
+        Assert.Equal("Your app token was rejected. Paste a new one in Settings.", vm.ErrorMessage);
+        Assert.False(vm.IsPublishing);
+    }
+
+    [Fact]
+    public async Task PublishCommand_OnNetworkFailure_ShowsOfflineMessage_AndResetsIsPublishing()
+    {
+        var provider = new FakeBlogProvider
+        {
+            OnPublish = async (_, ct) =>
+            {
+                await Task.Yield();
+                throw new MicropubException(null, "No such host is known. (micro.blog:443)");
+            },
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Don't lose me" };
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Equal("Don't lose me", vm.Text);
+        Assert.Equal("You appear to be offline. Check your connection and try again.", vm.ErrorMessage);
+        Assert.False(vm.IsPublishing);
+        Assert.True(vm.PublishCommand.CanExecute(null));
     }
 
     [Fact]
@@ -150,14 +187,14 @@ public class ComposerViewModelTests
     {
         var provider = new FakeBlogProvider
         {
-            OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.Unauthorized, "App token was not valid."),
+            OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.InternalServerError, "Something went wrong."),
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello", PublishedUrl = "https://example.micro.blog/old-post.html" };
 
         await vm.PublishCommand.ExecuteAsync(null);
 
         Assert.Null(vm.PublishedUrl);
-        Assert.Equal("App token was not valid.", vm.ErrorMessage);
+        Assert.Equal("Something went wrong.", vm.ErrorMessage);
     }
 
     [Fact]

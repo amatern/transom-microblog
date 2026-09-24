@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using Transom.App.Services;
 using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
@@ -8,11 +9,15 @@ using Transom.Core.Models;
 namespace Transom.App.ViewModels;
 
 /// <summary>Token entry, verification and profile display (SPEC.md §4.4). No WinUI types
-/// (CLAUDE.md Rule 5) — unit tested in <c>Transom.App.Tests</c>.</summary>
+/// (CLAUDE.md Rule 5) — unit tested in <c>Transom.App.Tests</c>. The profile itself lives in
+/// <see cref="Services.AccountStateService"/> (a DI singleton), not on this view model, so the app
+/// shell's NavigationView footer sees the same state instead of a stale copy.</summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AccountClient _accountClient;
     private readonly ICredentialStore _credentialStore;
+
+    public AccountStateService Account { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(VerifyCommand))]
@@ -25,22 +30,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _errorMessage;
 
-    [ObservableProperty]
-    private string? _accountName;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSignedIn))]
-    private string? _accountUsername;
-
-    [ObservableProperty]
-    private string? _avatarUrl;
-
-    public bool IsSignedIn => AccountUsername is not null;
-
-    public SettingsViewModel(AccountClient accountClient, ICredentialStore credentialStore)
+    public SettingsViewModel(AccountClient accountClient, ICredentialStore credentialStore, AccountStateService account)
     {
         _accountClient = accountClient;
         _credentialStore = credentialStore;
+        Account = account;
     }
 
     private bool CanVerify() => !IsVerifying && !string.IsNullOrWhiteSpace(TokenInput);
@@ -98,16 +92,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void SignOut()
     {
         _credentialStore.Remove(CredentialAccounts.Default);
-        AccountName = null;
-        AccountUsername = null;
-        AvatarUrl = null;
+        Account.Clear();
         ErrorMessage = null;
     }
 
-    private void PopulateProfile(AccountInfo account)
-    {
-        AccountName = account.Name;
-        AccountUsername = account.Username;
-        AvatarUrl = account.Avatar;
-    }
+    private void PopulateProfile(AccountInfo account) => Account.SetProfile(account);
 }

@@ -34,9 +34,11 @@ public sealed partial class ComposerPage : Page
     // The Title and Post-text TextBoxes handle Enter themselves (AcceptsReturn on the body box,
     // and TextBox reserves the Enter key in general) before the page-level KeyboardAccelerator
     // ever sees it, so Ctrl+Enter while focus is in either box never reached
-    // PublishAccelerator_Invoked. Intercept it here instead: mark it handled up front so no
-    // newline is inserted, then run the same publish logic as the accelerator.
-    private void ComposerTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    // PublishAccelerator_Invoked. Intercept it here instead. This must be PreviewKeyDown, not
+    // KeyDown: TextBox's own newline-insertion runs as class handling of KeyDown, which fires
+    // before an instance KeyDown handler on the same TextBox ever sees the event, so e.Handled
+    // set there is too late. PreviewKeyDown tunnels ahead of that and can suppress it.
+    private void ComposerTextBox_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter)
         {

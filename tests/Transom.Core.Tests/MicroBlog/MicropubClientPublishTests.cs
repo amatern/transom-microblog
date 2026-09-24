@@ -100,4 +100,30 @@ public class MicropubClientPublishTests
 
         Assert.DoesNotContain("test-token", ex.Message);
     }
+
+    [Fact]
+    public async Task PublishAsync_NoRouteToHost_ThrowsMicropubExceptionWithNullStatusCode()
+    {
+        // Publishing with no network connection must not let a raw HttpRequestException escape
+        // uncaught — it becomes one domain exception type here, at the client layer, so every
+        // caller (ComposerViewModel included) only ever handles one type.
+        var handler = new ThrowingHttpMessageHandler(() => new HttpRequestException("No such host is known. (micro.blog:443)"));
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        var ex = await Assert.ThrowsAsync<MicropubException>(() => client.PublishAsync("test-token", new PostDraft("x", null, false), CancellationToken.None));
+
+        Assert.Null(ex.StatusCode);
+        Assert.DoesNotContain("test-token", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsync_Timeout_ThrowsMicropubExceptionWithNullStatusCode()
+    {
+        var handler = new ThrowingHttpMessageHandler(() => new TaskCanceledException("The request timed out.", new TimeoutException()));
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        var ex = await Assert.ThrowsAsync<MicropubException>(() => client.PublishAsync("test-token", new PostDraft("x", null, false), CancellationToken.None));
+
+        Assert.Null(ex.StatusCode);
+    }
 }
