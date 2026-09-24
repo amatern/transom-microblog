@@ -36,11 +36,20 @@ internal sealed class FixtureHttpMessageHandler : HttpMessageHandler
         // Buffer and preserve content
         if (request.Content is not null)
         {
-            var content = await request.Content.ReadAsStringAsync(cancellationToken);
-            var contentType = request.Content.Headers.ContentType?.ToString();
-            copy.Content = contentType is not null
-                ? new StringContent(content, Encoding.UTF8, contentType)
-                : new StringContent(content);
+            var bytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+            copy.Content = new ByteArrayContent(bytes);
+
+            // Preserve the original content type if it exists
+            if (request.Content.Headers.ContentType is not null)
+            {
+                copy.Content.Headers.ContentType = request.Content.Headers.ContentType;
+            }
+
+            // Copy other content headers
+            foreach (var header in request.Content.Headers.Where(h => h.Key != "Content-Type"))
+            {
+                copy.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
         }
 
         LastRequest = copy;

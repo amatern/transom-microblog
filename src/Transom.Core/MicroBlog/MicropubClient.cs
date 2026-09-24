@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using Transom.Core.Http;
 using Transom.Core.Models;
 
 namespace Transom.Core.MicroBlog;
@@ -70,6 +71,36 @@ public sealed class MicropubClient
         }
 
         return new PublishResult(url, body?.Preview);
+    }
+
+    /// <summary>
+    /// Uploads media to the Micropub media endpoint, returning the URL assigned by the server.
+    /// Wraps the uploaded stream in <see cref="ProgressReportingStream"/> to report progress without
+    /// WinRT dependencies. Callers may pass <c>null</c> for <paramref name="progress"/> if they
+    /// don't wish to track upload progress.
+    /// </summary>
+    public async Task<MediaItem> UploadMediaAsync(string token, string mediaEndpoint, Stream data, string fileName, string contentType, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var length = data.CanSeek ? data.Length : -1;
+        using var progressStream = new ProgressReportingStream(data, length, progress);
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(progressStream);
+        fileContent.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        content.Add(fileContent, "file", fileName);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, mediaEndpoint) { Content = content };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+        await ThrowIfErrorAsync(response, cancellationToken).ConfigureAwait(false);
+
+        var url = response.Headers.Location?.ToString();
+        if (string.IsNullOrEmpty(url))
+        {
+            throw new MicropubException(response.StatusCode, "Upload succeeded but no media URL was returned.");
+        }
+
+        return new MediaItem(url);
     }
 
     /// <summary>
