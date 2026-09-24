@@ -12,13 +12,20 @@ should become one GitHub issue and one PR. Story IDs (U#) refer to `SPEC.md` §3
 **Done when:** CI is green and the app opens to an empty shell.
 
 ## M1 — Sign in and text post (U1, U2)
-- [ ] `TransomJsonContext` (source-generated) with the first real DTOs
-- [ ] `ICredentialStore` + `PasswordVault` implementation
-- [ ] Settings → paste app token → verify (`/account/verify` or `q=config`) → show avatar/name
-- [ ] `MicropubClient.GetConfigAsync`, `PublishAsync` (text + optional title)
-- [ ] Composer: text, character count, auto Title field over 300 chars, Ctrl+Enter publishes
-- [ ] Success InfoBar with link to the post; failure keeps text and offers Retry
+- [x] `TransomJsonContext` (source-generated) with the first real DTOs
+- [x] `ICredentialStore` + `PasswordVault` implementation
+- [x] Settings → paste app token → verify (`/account/verify` or `q=config`) → show avatar/name
+- [x] `MicropubClient.GetConfigAsync`, `PublishAsync` (text + optional title)
+- [x] Composer: text, character count, auto Title field over 300 chars, Ctrl+Enter publishes
+- [x] Success InfoBar with link to the post; failure keeps text and offers Retry
 **Done when:** I can publish a text post from the app and see it on my blog.
+
+**Verified manually** (2026-09-24, real account, PR #3): Ctrl+Enter publishes and plain Enter still
+inserts a newline; the signed-in indicator shows avatar + name and clears on sign out; publishing
+offline shows "You appear to be offline…" with a working Retry and keeps the composed text; drafts
+save with a working preview link; the 300-character Title boundary works both appearing and
+disappearing; sign-in survives an app restart. Test drafts created during verification were
+deleted from the account afterward.
 
 ## M2 — Images (U3)
 - [ ] Media endpoint upload with progress (`multipart/form-data`, part `file`)
