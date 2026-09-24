@@ -185,7 +185,7 @@ Base URL `https://micro.blog`. All requests: `Authorization: Bearer <token>`.
     pasted one, and treat `expires_at` as optional/nullable (format unconfirmed).
   - Error: `{"error": "App token was not valid."}` (status code unconfirmed by docs; M1 treats
     any non-2xx or an `error` field as invalid and falls back to `GET /micropub?q=config` if
-    `/account/verify` itself is unreachable).
+    `/account/verify` itself is unreachable — that fallback's response shape is confirmed in §6.2).
 - **M7:** IndieAuth sign-in with PKCE and a loopback redirect (`http://127.0.0.1:<port>/`),
   system browser, no embedded web view.
 
@@ -204,6 +204,28 @@ Base URL `https://micro.blog`. All requests: `Authorization: Bearer <token>`.
 | Update / delete | JSON `{"action":"update"|"delete","url":...}` (W3C Micropub) — v1.1 |
 
 Success: `201 Created` / `202 Accepted` with `Location` header = post URL.
+
+**`q=config` shape confirmed** (2026-09-24, against a real account — resolving the M1 discovery
+note that flagged this as unverified): `destination[]` **is present even for a single-blog
+account** (the public docs' minimal example just omits `destination` entirely, which is what made
+this unconfirmed — a real single-blog response still returns a one-entry array, matching the
+multi-blog shape). Each destination carries:
+```json
+{"uid": "https://example.micro.blog/", "name": "example.micro.blog",
+ "microblog-audio": true, "microblog-default": true, "microblog-title": "Example Blog"}
+```
+`name` is the domain; `microblog-title` is the human-chosen blog title — prefer it when showing a
+blog to the user (`BlogInfo.DisplayName`), falling back to `name`. `microblog-default` flags the
+blog to publish to when the user hasn't chosen one; when no destination is flagged (not guaranteed
+present), Transom treats the first one as the default. `microblog-audio` is unused by v1.
+
+The response also includes fields not modelled yet, kept here for the milestones that need them:
+- `post-types[]` — each post type's allowed `properties`. Confirms `photo`/`mp-photo-alt` for photo
+  posts (M2), and `category`/`post-status`/`mp-destination` for notes (M5). Also `mp-channel`
+  (`channels[]`, e.g. `default`/Posts, `pages`/Pages) for M5+.
+- `syndicate-to[]` — the account's cross-posting targets (Medium, Mastodon, Flickr, Bluesky, Nostr
+  in the confirmed response). See §9: for Micro.blog users this is the preferred route to those
+  platforms over separate providers.
 
 **Media upload:** `POST <media-endpoint>` (`https://micro.blog/micropub/media`),
 `multipart/form-data`, part name `file` → `202 Accepted`, `Location: https://…/uploads/…jpg`.
@@ -256,6 +278,13 @@ Poll no more often than every 60 s; back off exponentially on 429/5xx; send a
 ## 9. Other platforms (post-v1)
 Micro.blog already cross-posts to Mastodon, Bluesky, Threads, LinkedIn, Tumblr and others, so
 direct posting is only worth it for people who don't route everything through Micro.blog.
+
+**For Micro.blog users specifically, this is now the preferred route, not separate providers:**
+`q=config`'s `syndicate-to[]` (§6.2, confirmed 2026-09-24) lists the account's own configured
+cross-posting targets. A per-post syndication checkbox list sending `mp-syndicate-to=<uid>` and
+letting Micro.blog do the cross-posting is less work than a Mastodon/Bluesky `IBlogProvider` and
+doesn't need separate credentials. The table below is still relevant for non-Micro.blog accounts
+(generic Micropub, or platforms Micro.blog itself doesn't syndicate to).
 
 | Provider | Effort | Notes |
 |---|---|---|

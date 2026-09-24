@@ -66,4 +66,5 @@ should become one GitHub issue and one PR. Story IDs (U#) refer to `SPEC.md` §3
 - Edit/delete posts (Micropub update/delete)
 - Toast notifications for mentions
 - Providers: generic Micropub, Mastodon, Bluesky (see SPEC §9)
+- Syndication targets from q=config (mp-syndicate-to) (see SPEC §9)
 - winget / Microsoft Store listing

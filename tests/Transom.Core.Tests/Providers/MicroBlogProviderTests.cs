@@ -29,6 +29,36 @@ public class MicroBlogProviderTests
     }
 
     [Fact]
+    public async Task GetBlogsAsync_NoneFlaggedDefault_MarksFirstAsDefault()
+    {
+        var handler = new FixtureHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(FixtureFile.ReadText("config-two-blogs.json"), Encoding.UTF8, "application/json"),
+        });
+        var provider = BuildProvider(handler, "test-token");
+
+        var blogs = await provider.GetBlogsAsync(CancellationToken.None);
+
+        Assert.True(blogs[0].IsDefault);
+        Assert.False(blogs[1].IsDefault);
+    }
+
+    [Fact]
+    public async Task GetBlogsAsync_OneFlaggedDefault_KeepsTheFlaggedOne_RegardlessOfOrder()
+    {
+        var handler = new FixtureHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(FixtureFile.ReadText("config-two-blogs-with-default.json"), Encoding.UTF8, "application/json"),
+        });
+        var provider = BuildProvider(handler, "test-token");
+
+        var blogs = await provider.GetBlogsAsync(CancellationToken.None);
+
+        Assert.False(blogs[0].IsDefault);
+        Assert.True(blogs[1].IsDefault);
+    }
+
+    [Fact]
     public async Task PublishAsync_NoStoredToken_Throws()
     {
         var handler = new FixtureHttpMessageHandler(_ => throw new InvalidOperationException("Should not call the network without a token."));

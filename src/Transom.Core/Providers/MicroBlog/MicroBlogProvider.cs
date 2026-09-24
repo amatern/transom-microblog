@@ -1,3 +1,5 @@
+using System.Linq;
+
 using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
@@ -24,7 +26,22 @@ public sealed class MicroBlogProvider : IBlogProvider
     public async Task<IReadOnlyList<BlogInfo>> GetBlogsAsync(CancellationToken cancellationToken)
     {
         var config = await _micropubClient.GetConfigAsync(RequireToken(), cancellationToken).ConfigureAwait(false);
-        return config.Destinations;
+        return WithDefaultMarked(config.Destinations);
+    }
+
+    /// <summary>SPEC.md §6.2: a real account's <c>q=config</c> flags its default blog via
+    /// <c>microblog-default</c> on one destination, but that flag isn't guaranteed to be present —
+    /// when no destination is flagged, the first one is treated as the default instead.</summary>
+    private static IReadOnlyList<BlogInfo> WithDefaultMarked(IReadOnlyList<BlogInfo> destinations)
+    {
+        if (destinations.Count == 0 || destinations.Any(blog => blog.IsDefault))
+        {
+            return destinations;
+        }
+
+        var withDefault = destinations.ToList();
+        withDefault[0] = withDefault[0] with { IsDefault = true };
+        return withDefault;
     }
 
     public Task<PublishResult> PublishAsync(PostDraft draft, CancellationToken cancellationToken)
