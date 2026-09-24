@@ -56,32 +56,39 @@ public sealed class WicImageProcessor : IImageProcessor
 
     private static async Task<MemoryStream> EncodeAsync(BitmapDecoder decoder, Guid encoderId, int targetWidth, int targetHeight, CancellationToken cancellationToken, int? jpegQuality = null)
     {
-        var softwareBitmap = await decoder.GetSoftwareBitmapAsync().AsTask(cancellationToken).ConfigureAwait(false);
-        using var outputStream = new InMemoryRandomAccessStream();
-
-        BitmapPropertySet? propertySet = null;
-        if (jpegQuality is { } quality)
+        try
         {
-            propertySet = new BitmapPropertySet
+            using var softwareBitmap = await decoder.GetSoftwareBitmapAsync().AsTask(cancellationToken).ConfigureAwait(false);
+            using var outputStream = new InMemoryRandomAccessStream();
+
+            BitmapPropertySet? propertySet = null;
+            if (jpegQuality is { } quality)
             {
-                ["ImageQuality"] = new BitmapTypedValue(quality / 100.0, Windows.Foundation.PropertyType.Single),
-            };
+                propertySet = new BitmapPropertySet
+                {
+                    ["ImageQuality"] = new BitmapTypedValue(quality / 100.0, Windows.Foundation.PropertyType.Single),
+                };
+            }
+
+            var encoder = propertySet is null
+                ? await BitmapEncoder.CreateAsync(encoderId, outputStream).AsTask(cancellationToken).ConfigureAwait(false)
+                : await BitmapEncoder.CreateAsync(encoderId, outputStream, propertySet).AsTask(cancellationToken).ConfigureAwait(false);
+
+            encoder.SetSoftwareBitmap(softwareBitmap);
+            encoder.BitmapTransform.ScaledWidth = (uint)targetWidth;
+            encoder.BitmapTransform.ScaledHeight = (uint)targetHeight;
+            encoder.IsThumbnailGenerated = false;
+            await encoder.FlushAsync().AsTask(cancellationToken).ConfigureAwait(false);
+
+            var result = new MemoryStream();
+            outputStream.Seek(0);
+            await outputStream.AsStreamForRead().CopyToAsync(result, cancellationToken).ConfigureAwait(false);
+            result.Position = 0;
+            return result;
         }
-
-        var encoder = propertySet is null
-            ? await BitmapEncoder.CreateAsync(encoderId, outputStream).AsTask(cancellationToken).ConfigureAwait(false)
-            : await BitmapEncoder.CreateAsync(encoderId, outputStream, propertySet).AsTask(cancellationToken).ConfigureAwait(false);
-
-        encoder.SetSoftwareBitmap(softwareBitmap);
-        encoder.BitmapTransform.ScaledWidth = (uint)targetWidth;
-        encoder.BitmapTransform.ScaledHeight = (uint)targetHeight;
-        encoder.IsThumbnailGenerated = false;
-        await encoder.FlushAsync().AsTask(cancellationToken).ConfigureAwait(false);
-
-        var result = new MemoryStream();
-        outputStream.Seek(0);
-        await outputStream.AsStreamForRead().CopyToAsync(result, cancellationToken).ConfigureAwait(false);
-        result.Position = 0;
-        return result;
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Couldn't process this image.", ex);
+        }
     }
 }
