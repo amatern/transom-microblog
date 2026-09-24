@@ -49,15 +49,18 @@ posting APIs), §8 (storage/security). `docs/milestones.md` M1. Tracking issue: 
   failure. Neither doc page shows the HTTP status code used for the error case, so
   `AccountClient` treats any non-2xx as a failure. The returned `token` can differ from what was
   sent — Task 3 stores the *returned* token.
-- **`q=config`'s `destination[]` shape when there's exactly one blog is unconfirmed.** The public
-  docs show `{"media-endpoint": "..."}` alone (no `destination`) in the minimal example, and a
-  separate multi-blog example with `destination: [{uid, name, microblog-title}, ...]`, but no
-  combined single-blog example. Task 1's `config-one-blog.json` fixture assumes a one-entry
-  `destination` array (matching the multi-blog shape) — **when you test against your real account
-  in Task 12's manual smoke test, confirm this and adjust the model/fixture if `destination` is
-  absent for a single-blog account.** `MicroBlogProvider.GetBlogsAsync` doesn't special-case an
-  empty array (it just returns whatever `Destinations` the config has), so no code change should
-  be needed even if the assumption is wrong — only the fixture.
+- **`q=config`'s `destination[]` shape when there's exactly one blog is confirmed** (2026-09-24,
+  against a real account — see prompt 13 and `SPEC.md` §6.2). The assumption held: a single-blog
+  account still returns a one-entry `destination` array, matching the multi-blog shape, not the
+  docs' `destination`-less minimal example. What differed from the original assumption: each
+  destination also carries `microblog-default` (bool) and `microblog-audio` (bool, unused), not
+  just `uid`/`name`/`microblog-title`; `BlogInfo` gained `IsDefault` and a `DisplayName` fallback
+  (`Title ?? Name`), and `MicroBlogProvider.GetBlogsAsync` now marks the first destination default
+  when none is flagged. The top-level response also carries `post-types[]`, `channels[]` and
+  `syndicate-to[]`, none of which existed in the assumed shape — recorded in `SPEC.md` §6.2/§9 and
+  `docs/milestones.md` "Later" for the milestones that use them (M2, M5, and a possible
+  Micro.blog-syndication feature respectively). None of this required an `IBlogProvider` interface
+  change; `GetBlogsAsync` still just returns `IReadOnlyList<BlogInfo>`.
 - **401/500 error body shapes are unconfirmed** (the docs don't show Micropub error responses).
   Task 2's `error-401.json`/`error-500.json` fixtures use the same `{"error": "..."}` shape
   `/account/verify` documents, since that's the only confirmed Micro.blog error convention. If

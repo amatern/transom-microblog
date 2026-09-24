@@ -24,6 +24,9 @@ jobs:
       - name: Test
         run: dotnet test tests/Transom.Core.Tests --no-restore
 
+      - name: Test App
+        run: dotnet test tests/Transom.App.Tests -p:Platform=x64 --no-restore
+
       - name: Format check
         run: dotnet format Transom.sln --verify-no-changes
 

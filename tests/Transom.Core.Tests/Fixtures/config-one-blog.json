@@ -1,0 +1,50 @@
+{
+  "media-endpoint": "https://micro.blog/micropub/media",
+  "destination": [
+    {
+      "uid": "https://example.micro.blog/",
+      "name": "example.micro.blog",
+      "microblog-audio": true,
+      "microblog-default": true,
+      "microblog-title": "Example Blog"
+    }
+  ],
+  "post-types": [
+    {
+      "type": "note",
+      "name": "Post",
+      "properties": ["content", "published", "post-status", "category", "read-of", "mp-destination", "checkin", "location"]
+    },
+    {
+      "type": "article",
+      "name": "Article",
+      "properties": ["name", "content", "published", "post-status", "category", "mp-channel", "mp-destination"]
+    },
+    {
+      "type": "photo",
+      "name": "Photo",
+      "properties": ["name", "content", "published", "post-status", "category", "mp-destination", "photo", "mp-photo-alt"]
+    },
+    {
+      "type": "reply",
+      "name": "Reply",
+      "properties": ["content", "in-reply-to"]
+    },
+    {
+      "type": "bookmark",
+      "name": "Bookmark",
+      "properties": ["bookmark-of", "summary"]
+    }
+  ],
+  "channels": [
+    { "uid": "default", "name": "Posts" },
+    { "uid": "pages", "name": "Pages" }
+  ],
+  "syndicate-to": [
+    { "uid": "medium", "name": "Medium (@example)" },
+    { "uid": "mastodon", "name": "Mastodon (@example)" },
+    { "uid": "flickr", "name": "Flickr (example)" },
+    { "uid": "bluesky", "name": "Bluesky (example)" },
+    { "uid": "nostr", "name": "Nostr (npub example)" }
+  ]
+}

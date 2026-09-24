@@ -18,6 +18,14 @@ This project is co-written with [Claude](https://claude.ai). The spec (`SPEC.md`
 working agreement for AI-assisted development (`CLAUDE.md`) are part of the repo so you can
 see how it's built. Commits with AI help carry a `Co-Authored-By` trailer.
 
+## Getting started
+
+To sign in to Transom:
+1. Visit [micro.blog](https://micro.blog) → Account → App tokens
+2. Create a new app token with **Read and write** access (not "Read only" or "Create content" — Transom needs read access for future versions and write access to publish)
+3. Set Expiration to "Forever" (or your preference); you can revoke the token anytime from that same page
+4. Paste the token into Transom's Settings page to sign in
+
 ## Building
 ```powershell
 git clone https://github.com/amatern/transom-microblog.git

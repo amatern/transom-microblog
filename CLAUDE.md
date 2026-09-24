@@ -54,6 +54,8 @@ and deploy fails with DEP0500.
 ## Style
 - File-scoped namespaces, `var` when the type is obvious, records for DTOs/models.
 - XAML: use `x:Bind`, theme resources (no hard-coded colors), Fluent icons (`SymbolIcon`/`FontIcon`).
+- x:Bind never converts string→ImageSource/Uri. Use a converter that returns null for empty
+  values. A bad binding shows up only at runtime, as ArgumentException "value".
 - Public APIs in Core get XML doc comments.
 
 ## Commits

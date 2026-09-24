@@ -13,6 +13,18 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      Because WindowsPackageType=MSIX and OutputType=WinExe, the Windows App SDK build tooling
+      normally compiles a [ModuleInitializer] into this assembly that calls
+      DeploymentManager.Initialize() (self-healing framework-package check) the instant
+      Transom.App.dll is *loaded*, in any process. That breaks tests/Transom.App.Tests, which
+      loads Transom.App.dll via ProjectReference into a bare testhost.exe (not a packaged/activated
+      MSIX process): the module initializer throws COMException (REGDB_E_CLASSNOTREG) before any
+      test body runs. Disabling it here only turns off that optional startup self-repair check;
+      the OS still resolves the Windows App SDK framework package normally via the MSIX package
+      dependency graph.
+    -->
+    <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)'=='Debug'">false</WindowsAppSdkDeploymentManagerInitialize>
   </PropertyGroup>
 
   <ItemGroup>
@@ -54,6 +66,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.6.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
   </ItemGroup>
 
   <ItemGroup>
