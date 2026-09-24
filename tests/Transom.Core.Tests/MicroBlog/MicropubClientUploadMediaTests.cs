@@ -44,7 +44,7 @@ public class MicropubClientUploadMediaTests
 
         Assert.Equal(MediaEndpoint, handler.LastRequest!.RequestUri!.ToString());
         var body = await handler.LastRequest.Content!.ReadAsStringAsync();
-        Assert.Contains("filename=\"photo.jpg\"", body);
+        Assert.Contains("filename=photo.jpg", body);
         Assert.Contains("fake-image-bytes", body);
     }
 
