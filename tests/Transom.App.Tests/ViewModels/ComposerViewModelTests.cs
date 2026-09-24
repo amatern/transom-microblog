@@ -108,6 +108,68 @@ public class ComposerViewModelTests
     }
 
     [Fact]
+    public async Task PublishCommand_OnSuccess_Published_LinksToPublicUrl()
+    {
+        var provider = new FakeBlogProvider
+        {
+            OnPublish = (_, _) => Task.FromResult(new PublishResult("https://example.micro.blog/post.html", null)),
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings { PostAsDraft = false }, SignedInCredentialStore()) { Text = "Hello" };
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.False(vm.PublishedAsDraft);
+        Assert.Equal("Published", vm.PublishSuccessTitle);
+        Assert.Equal("https://example.micro.blog/post.html", vm.PublishedUrl);
+        Assert.Equal(new Uri("https://example.micro.blog/post.html"), vm.PublishedUri);
+    }
+
+    [Fact]
+    public async Task PublishCommand_OnSuccess_Draft_LinksToPreviewUrl_NotThePublicUrl()
+    {
+        // SPEC.md §6.2: a draft response's `url` is the eventual public URL, which 404s until the
+        // post is actually published. The bar must link to `preview`, not `url`.
+        var provider = new FakeBlogProvider
+        {
+            OnPublish = (_, _) => Task.FromResult(new PublishResult(
+                "https://example.micro.blog/2026/09/22/transom-test.html",
+                "https://micro.blog/account/posts/123/preview/456")),
+        };
+        var settings = new FakeComposerSettings { PostAsDraft = true };
+        var vm = new ComposerViewModel(provider, settings, SignedInCredentialStore()) { Text = "Hello" };
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.True(vm.PublishedAsDraft);
+        Assert.Equal("Saved as draft", vm.PublishSuccessTitle);
+        Assert.Equal("https://micro.blog/account/posts/123/preview/456", vm.PublishedUrl);
+    }
+
+    [Fact]
+    public async Task PublishCommand_ResetsPreviousSuccess_WhenARetryFails()
+    {
+        var provider = new FakeBlogProvider
+        {
+            OnPublish = (_, _) => throw new MicropubException(System.Net.HttpStatusCode.Unauthorized, "App token was not valid."),
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello", PublishedUrl = "https://example.micro.blog/old-post.html" };
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.PublishedUrl);
+        Assert.Equal("App token was not valid.", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public void PublishedUri_Null_WhenPublishedUrlIsMissingOrMalformed()
+    {
+        var vm = BuildViewModel();
+
+        Assert.Null(vm.PublishedUri);
+        Assert.False(vm.HasPublishedUri);
+    }
+
+    [Fact]
     public void ShowSignInHint_True_WhenNoTokenStored()
     {
         var vm = new ComposerViewModel(new FakeBlogProvider(), new FakeComposerSettings(), new InMemoryCredentialStore());

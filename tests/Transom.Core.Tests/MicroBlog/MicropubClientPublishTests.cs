@@ -44,6 +44,30 @@ public class MicropubClientPublishTests
     }
 
     [Fact]
+    public async Task PublishAsync_Draft_KeepsPreviewFromBody_EvenWhenLocationHeaderIsAlsoPresent()
+    {
+        // SPEC.md §6.2 documents Location as the general success signal and `preview` as a body
+        // field a draft response carries; it never says a server can't send both. If it does, the
+        // body's `preview` must still win, or drafts would link callers to the 404-until-published
+        // public URL — the exact bug this client exists to prevent.
+        var handler = new FixtureHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Accepted)
+            {
+                Content = new StringContent(FixtureFile.ReadText("publish-draft-response.json"), Encoding.UTF8, "application/json"),
+            };
+            response.Headers.Location = new Uri("https://example.micro.blog/2026/09/21/hello-world.html");
+            return response;
+        });
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        var result = await client.PublishAsync("test-token", new PostDraft("Draft text", "A title", PostAsDraft: true), CancellationToken.None);
+
+        Assert.Equal("https://example.micro.blog/2026/09/21/hello-world.html", result.Url);
+        Assert.Equal("https://micro.blog/account/posts/123/preview/456", result.PreviewUrl);
+    }
+
+    [Fact]
     public async Task PublishAsync_SendsExpectedFormFields()
     {
         var handler = new FixtureHttpMessageHandler(_ =>

@@ -19,6 +19,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBox
@@ -28,28 +29,33 @@
             PlaceholderText="Title"
             AutomationProperties.Name="Post title"
             Text="{x:Bind ViewModel.Title, Mode=TwoWay}"
-            Visibility="{x:Bind ViewModel.ShowTitleField, Mode=OneWay}" />
+            Visibility="{x:Bind ViewModel.ShowTitleField, Mode=OneWay}"
+            KeyDown="ComposerTextBox_KeyDown" />
 
         <TextBox
+            x:Name="BodyBox"
             Grid.Row="1"
             AcceptsReturn="True"
             TextWrapping="Wrap"
             PlaceholderText="What's on your mind?"
             AutomationProperties.Name="Post text"
-            Text="{x:Bind ViewModel.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            Text="{x:Bind ViewModel.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+            KeyDown="ComposerTextBox_KeyDown" />
 
         <TextBlock
             Grid.Row="2"
             Margin="0,8,0,8"
             HorizontalAlignment="Right"
             Opacity="0.7"
-            Text="{x:Bind ViewModel.CharacterCount, Mode=OneWay}" />
+            Text="{x:Bind ViewModel.CharacterCountDisplay, Mode=OneWay}"
+            AutomationProperties.Name="{x:Bind ViewModel.CharacterCountAutomationName, Mode=OneWay}" />
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="12">
             <Button
                 Content="Publish"
                 AutomationProperties.Name="Publish post"
-                Command="{x:Bind ViewModel.PublishCommand}" />
+                Command="{x:Bind ViewModel.PublishCommand}"
+                ToolTipService.ToolTip="Publish (Ctrl+Enter)" />
             <ProgressRing IsActive="{x:Bind ViewModel.IsPublishing, Mode=OneWay}" Width="20" Height="20" />
             <TextBlock
                 Text="Sign in under Settings to publish"
@@ -58,24 +64,37 @@
                 Visibility="{x:Bind ViewModel.ShowSignInHint, Mode=OneWay}" />
         </StackPanel>
 
-        <InfoBar
-            Grid.Row="3"
-            Margin="0,48,0,0"
-            IsOpen="{x:Bind ViewModel.PublishedUrl, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
-            Severity="Success"
-            Title="Published"
-            Message="{x:Bind ViewModel.PublishedUrl, Mode=OneWay}" />
+        <StackPanel Grid.Row="4" Margin="0,16,0,0" Spacing="8">
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.PublishedUrl, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+                Severity="Success"
+                Title="{x:Bind ViewModel.PublishSuccessTitle, Mode=OneWay}">
+                <InfoBar.Content>
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="12"
+                        Visibility="{x:Bind ViewModel.HasPublishedUri, Mode=OneWay}">
+                        <HyperlinkButton
+                            Content="{x:Bind ViewModel.PublishedUrl, Mode=OneWay}"
+                            NavigateUri="{x:Bind ViewModel.PublishedUri, Mode=OneWay}"
+                            AutomationProperties.Name="View post" />
+                        <Button
+                            Content="Copy link"
+                            AutomationProperties.Name="Copy link"
+                            Click="CopyLinkButton_Click" />
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
 
-        <InfoBar
-            Grid.Row="3"
-            Margin="0,48,0,0"
-            IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
-            Severity="Error"
-            Title="Couldn't publish"
-            Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}">
-            <InfoBar.ActionButton>
-                <Button Content="Retry" AutomationProperties.Name="Retry publish" Command="{x:Bind ViewModel.PublishCommand}" />
-            </InfoBar.ActionButton>
-        </InfoBar>
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+                Severity="Error"
+                Title="Couldn't publish"
+                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}">
+                <InfoBar.ActionButton>
+                    <Button Content="Retry" AutomationProperties.Name="Retry publish" Command="{x:Bind ViewModel.PublishCommand}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
     </Grid>
 </Page>

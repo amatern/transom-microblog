@@ -53,19 +53,23 @@ public sealed class MicropubClient
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         await ThrowIfErrorAsync(response, cancellationToken).ConfigureAwait(false);
 
-        if (response.Headers.Location is { } location)
-        {
-            return new PublishResult(location.ToString(), null);
-        }
+        // Read the body even when a Location header is present: SPEC.md §6.2 documents Location as
+        // the general success signal and `preview` as a body field a draft response carries, and
+        // doesn't say the two are mutually exclusive. Returning on Location alone would silently
+        // drop `preview` for a server that sends both, which is exactly the "draft links to the
+        // eventual public URL" bug this client exists to avoid.
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var body = string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize(json, TransomJsonContext.Default.PublishResponseBody);
 
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var body = await JsonSerializer.DeserializeAsync(stream, TransomJsonContext.Default.PublishResponseBody, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(body?.Url))
+        var url = !string.IsNullOrEmpty(body?.Url) ? body.Url : response.Headers.Location?.ToString();
+        if (string.IsNullOrEmpty(url))
         {
             throw new MicropubException(response.StatusCode, "Publish succeeded but no post URL was returned.");
         }
 
-        return new PublishResult(body.Url, body.Preview);
+        return new PublishResult(url, body?.Preview);
     }
 
     internal static async Task ThrowIfErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)

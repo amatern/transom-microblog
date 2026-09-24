@@ -21,6 +21,8 @@ public sealed partial class ComposerViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CharacterCount))]
+    [NotifyPropertyChangedFor(nameof(CharacterCountDisplay))]
+    [NotifyPropertyChangedFor(nameof(CharacterCountAutomationName))]
     [NotifyPropertyChangedFor(nameof(ShowTitleField))]
     [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
     private string _text = string.Empty;
@@ -36,15 +38,35 @@ public sealed partial class ComposerViewModel : ObservableObject
     private string? _errorMessage;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PublishedUri))]
+    [NotifyPropertyChangedFor(nameof(HasPublishedUri))]
     private string? _publishedUrl;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PublishSuccessTitle))]
+    private bool _publishedAsDraft;
+
     public int CharacterCount => Text.Length;
+
+    /// <summary>Compact "N/threshold" label for the character counter, e.g. "42/300".</summary>
+    public string CharacterCountDisplay => $"{CharacterCount}/{TitleThreshold}";
+
+    public string CharacterCountAutomationName => $"{CharacterCount} of {TitleThreshold} characters";
 
     public bool ShowTitleField => Text.Length > TitleThreshold;
 
     public bool IsSignedIn { get; }
 
     public bool ShowSignInHint => !IsSignedIn;
+
+    /// <summary>The published or draft-preview URL as a <see cref="Uri"/>, or null when
+    /// <see cref="PublishedUrl"/> is missing or not a valid absolute URI (defends against binding
+    /// a malformed string straight to a XAML Uri-typed property — see CLAUDE.md Style).</summary>
+    public Uri? PublishedUri => Uri.TryCreate(PublishedUrl, UriKind.Absolute, out var uri) ? uri : null;
+
+    public bool HasPublishedUri => PublishedUri is not null;
+
+    public string PublishSuccessTitle => PublishedAsDraft ? "Saved as draft" : "Published";
 
     public ComposerViewModel(IBlogProvider provider, IComposerSettings settings, ICredentialStore credentialStore)
     {
@@ -60,11 +82,18 @@ public sealed partial class ComposerViewModel : ObservableObject
     {
         IsPublishing = true;
         ErrorMessage = null;
+        PublishedUrl = null;
+        PublishedAsDraft = false;
         try
         {
-            var draft = new PostDraft(Text, ShowTitleField ? Title : null, _settings.PostAsDraft);
+            var postAsDraft = _settings.PostAsDraft;
+            var draft = new PostDraft(Text, ShowTitleField ? Title : null, postAsDraft);
             var result = await _provider.PublishAsync(draft, cancellationToken).ConfigureAwait(true);
-            PublishedUrl = result.Url;
+
+            // SPEC.md §6.2: a draft response carries both `url` (the eventual public URL, which
+            // 404s until the post is published for real) and `preview`. Link to preview for drafts.
+            PublishedAsDraft = postAsDraft;
+            PublishedUrl = postAsDraft && !string.IsNullOrEmpty(result.PreviewUrl) ? result.PreviewUrl : result.Url;
             Text = string.Empty;
             Title = string.Empty;
         }
