@@ -140,7 +140,7 @@ public sealed partial class ComposerViewModel : ObservableObject
         image.ErrorMessage = null;
         try
         {
-            using var stream = new DeferredFileStream(new Uri(image.LocalFileUri).LocalPath);
+            using var stream = File.OpenRead(new Uri(image.LocalFileUri).LocalPath);
             var progress = new Progress<double>(value => image.UploadProgress = value);
             var result = await _provider.UploadMediaAsync(stream, image.FileName, image.ContentType, progress, cancellationToken).ConfigureAwait(true);
             image.SetUploaded(result.Url);
@@ -179,70 +179,6 @@ public sealed partial class ComposerViewModel : ObservableObject
         if (index >= 0 && index < Images.Count - 1)
         {
             Images.Move(index, index + 1);
-        }
-    }
-
-    /// <summary>Wraps a local file path as a <see cref="Stream"/> without opening the underlying
-    /// <see cref="FileStream"/> until something actually reads from it, seeks it, or inspects its
-    /// length. <see cref="IBlogProvider.UploadMediaAsync"/> needs a real <see cref="Stream"/> up
-    /// front, but the real Micropub client (<c>MicropubClient.UploadMediaAsync</c>) only touches it
-    /// once it starts serializing the HTTP request body — so deferring the open changes nothing for
-    /// production (the file still must exist by then, and a missing/moved file still fails there,
-    /// naturally). It does mean a fake <see cref="IBlogProvider"/> that never reads the stream
-    /// (<c>FakeBlogProvider</c> in tests) never triggers disk access at all, so this view model's
-    /// upload-orchestration tests can use placeholder local paths without needing real files on
-    /// disk, and a fast-cancel-before-upload-starts path (Review Focus #4) never opens a file handle
-    /// it would just have to close again.</summary>
-    private sealed class DeferredFileStream : Stream
-    {
-        private readonly string _path;
-        private FileStream? _inner;
-
-        public DeferredFileStream(string path)
-        {
-            _path = path;
-        }
-
-        private FileStream Inner => _inner ??= File.OpenRead(_path);
-
-        public override bool CanRead => Inner.CanRead;
-
-        public override bool CanSeek => Inner.CanSeek;
-
-        public override bool CanWrite => false;
-
-        public override long Length => Inner.Length;
-
-        public override long Position
-        {
-            get => Inner.Position;
-            set => Inner.Position = value;
-        }
-
-        public override void Flush() => _inner?.Flush();
-
-        public override int Read(byte[] buffer, int offset, int count) => Inner.Read(buffer, offset, count);
-
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-            => Inner.ReadAsync(buffer, offset, count, cancellationToken);
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-            => Inner.ReadAsync(buffer, cancellationToken);
-
-        public override long Seek(long offset, SeekOrigin origin) => Inner.Seek(offset, origin);
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner?.Dispose();
-            }
-
-            base.Dispose(disposing);
         }
     }
 }

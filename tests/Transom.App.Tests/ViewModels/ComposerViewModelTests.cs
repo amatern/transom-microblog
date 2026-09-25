@@ -244,7 +244,7 @@ public class ComposerViewModelTests
         var provider = new FakeBlogProvider();
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
 
-        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
 
         var image = Assert.Single(vm.Images);
         Assert.Equal(ComposerImageStatus.Uploaded, image.Status);
@@ -260,7 +260,7 @@ public class ComposerViewModelTests
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
 
-        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
 
         var image = Assert.Single(vm.Images);
         Assert.Equal(ComposerImageStatus.Failed, image.Status);
@@ -286,8 +286,8 @@ public class ComposerViewModelTests
             },
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
-        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
-        await vm.AddImageAsync("file:///C:/temp/b.jpg", "b.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("b.jpg"), "b.jpg", "image/jpeg", CancellationToken.None);
         var failedImage = vm.Images.Single(i => i.FileName == "a.jpg");
         var succeededImage = vm.Images.Single(i => i.FileName == "b.jpg");
         Assert.Equal(ComposerImageStatus.Failed, failedImage.Status);
@@ -313,7 +313,7 @@ public class ComposerViewModelTests
             },
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
-        var addTask = vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        var addTask = vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
         var image = Assert.Single(vm.Images);
         Assert.False(vm.PublishCommand.CanExecute(null));
         Assert.True(image.UploadCancellation.Token.CanBeCanceled);
@@ -337,10 +337,10 @@ public class ComposerViewModelTests
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
         for (var i = 0; i < 10; i++)
         {
-            await vm.AddImageAsync($"file:///C:/temp/{i}.jpg", $"{i}.jpg", "image/jpeg", CancellationToken.None);
+            await vm.AddImageAsync(CreateTempImageFile($"{i}.jpg"), $"{i}.jpg", "image/jpeg", CancellationToken.None);
         }
 
-        await vm.AddImageAsync("file:///C:/temp/eleventh.jpg", "eleventh.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("eleventh.jpg"), "eleventh.jpg", "image/jpeg", CancellationToken.None);
 
         Assert.Equal(10, vm.Images.Count);
         Assert.Equal("Up to 10 images per post.", vm.ErrorMessage);
@@ -351,8 +351,8 @@ public class ComposerViewModelTests
     {
         var provider = new FakeBlogProvider();
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
-        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
-        await vm.AddImageAsync("file:///C:/temp/b.jpg", "b.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("b.jpg"), "b.jpg", "image/jpeg", CancellationToken.None);
         vm.Images[0].AltText = "First";
         vm.Images[1].AltText = "Second";
 
@@ -373,7 +373,7 @@ public class ComposerViewModelTests
             OnPublish = (_, _) => throw new MicropubException(HttpStatusCode.InternalServerError, "Something went wrong."),
         };
         var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
-        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
 
         await vm.PublishCommand.ExecuteAsync(null);
 
@@ -381,6 +381,20 @@ public class ComposerViewModelTests
     }
 
     private static ComposerViewModel BuildViewModel() => new(new FakeBlogProvider(), new FakeComposerSettings(), SignedInCredentialStore());
+
+    // AddImageAsync's implementation opens the local file for real (File.OpenRead) at upload time,
+    // so these tests need a real file on disk rather than a placeholder path — a fake/non-existent
+    // path would make every one of these tests fail with FileNotFoundException before the fake
+    // provider's OnUploadMedia ever runs, which would silently hide a broken
+    // LocalFileUri-to-path conversion instead of exercising it. Left on disk deliberately (tiny
+    // files in the OS temp folder); no cleanup, consistent with how this suite already leaves
+    // other throwaway test artifacts behind.
+    private static string CreateTempImageFile(string fileName)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}-{fileName}");
+        File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF]);
+        return new Uri(path).AbsoluteUri;
+    }
 
     private static InMemoryCredentialStore SignedInCredentialStore()
     {
