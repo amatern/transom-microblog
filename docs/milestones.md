@@ -28,11 +28,19 @@ disappearing; sign-in survives an app restart. Test drafts created during verifi
 deleted from the account afterward.
 
 ## M2 — Images (U3)
-- [ ] Media endpoint upload with progress (`multipart/form-data`, part `file`)
-- [ ] App `IImageProcessor`: resize to 2048 px, JPEG q85, strip metadata; GIF passthrough
-- [ ] Composer image tray: picker, drag-drop, clipboard paste, reorder, remove
-- [ ] Alt text per image; `photo[]` + `mp-photo-alt[]` in publish
+- [x] Media endpoint upload with progress (`multipart/form-data`, part `file`)
+- [x] App `IImageProcessor`: resize to 2048 px, JPEG q85, strip metadata; GIF passthrough
+- [x] Composer image tray: picker, drag-drop, clipboard paste, reorder, remove
+- [x] Alt text per image; `photo[]` + `mp-photo-alt[]` in publish
 **Done when:** a post with 3 images and alt text appears correctly on the blog.
+
+**Verified manually** (2026-09-25, real account, PR #5): images added via picker, drag-drop, and
+clipboard paste; alt text kept; EXIF/GPS stripped from an uploaded JPEG; an animated GIF still
+animates after publish; a mid-upload network failure shows a per-image error and Retry re-uploads
+only that image, leaving other images and composed text intact; a corrupt file shows an error
+InfoBar instead of crashing the app; the 10-image cap holds and an 11th is refused; a two-image
+draft published with both photos in the correct order and alt text intact. Test drafts created
+during verification were deleted from the account afterward.
 
 ## M3 — Timeline (U4)
 - [ ] JSON Feed + `_microblog` models and `TimelineClient` (timeline, paging with `before_id`/`since_id`)
