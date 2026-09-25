@@ -51,6 +51,7 @@
         <ScrollViewer
             Grid.Row="2"
             Margin="0,8,0,0"
+            Padding="4,0,4,8"
             HorizontalScrollMode="Auto"
             HorizontalScrollBarVisibility="Auto"
             VerticalScrollMode="Disabled"
@@ -61,7 +62,7 @@
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="viewmodels:ComposerImageViewModel">
-                        <Grid Width="100" AutomationProperties.Name="{x:Bind FileName}">
+                        <Grid Width="140" AutomationProperties.Name="{x:Bind FileName}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="100" />
                                 <RowDefinition Height="Auto" />
@@ -80,10 +81,10 @@
                                 Visibility="{x:Bind ShowAltTextWarning, Mode=OneWay}"
                                 AutomationProperties.Name="Missing alt text" />
                             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="&#xE76B;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move left" Command="{x:Bind MoveLeftCommand}" />
-                                <Button Content="&#xE76C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move right" Command="{x:Bind MoveRightCommand}" />
-                                <Button Content="Retry" AutomationProperties.Name="Retry upload" Command="{x:Bind RetryCommand}" Visibility="{x:Bind IsFailed, Mode=OneWay}" />
-                                <Button Content="&#xE711;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Remove image" Command="{x:Bind RemoveCommand}" />
+                                <Button Padding="4" MinWidth="0" Content="&#xE76B;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move left" Command="{x:Bind MoveLeftCommand}" />
+                                <Button Padding="4" MinWidth="0" Content="&#xE76C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move right" Command="{x:Bind MoveRightCommand}" />
+                                <Button Padding="4" MinWidth="0" Content="Retry" AutomationProperties.Name="Retry upload" Command="{x:Bind RetryCommand}" Visibility="{x:Bind IsFailed, Mode=OneWay}" />
+                                <Button Padding="4" MinWidth="0" Content="&#xE711;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Remove image" Command="{x:Bind RemoveCommand}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
@@ -118,6 +119,12 @@
         </StackPanel>
 
         <StackPanel Grid.Row="6" Margin="0,16,0,0" Spacing="8">
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.AddImageErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+                Severity="Informational"
+                Title="Couldn't add image"
+                Message="{x:Bind ViewModel.AddImageErrorMessage, Mode=OneWay}" />
+
             <InfoBar
                 IsOpen="{x:Bind ViewModel.PublishedUrl, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
                 Severity="Success"

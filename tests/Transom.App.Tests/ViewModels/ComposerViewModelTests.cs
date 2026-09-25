@@ -331,6 +331,37 @@ public class ComposerViewModelTests
     }
 
     [Fact]
+    public async Task AddImageAsync_CancellingCallerToken_CancelsTheUpload()
+    {
+        var gate = new TaskCompletionSource();
+        var provider = new FakeBlogProvider
+        {
+            OnUploadMedia = async (fileName, ct) =>
+            {
+                await gate.Task.WaitAsync(ct);
+                return new MediaItem($"https://cdn.micro.blog/uploads/{fileName}");
+            },
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
+        using var cts = new CancellationTokenSource();
+
+        var addTask = vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", cts.Token);
+        var image = Assert.Single(vm.Images);
+
+        cts.Cancel();
+        try
+        {
+            await addTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.True(image.UploadCancellation.IsCancellationRequested);
+        Assert.Equal(ComposerImageStatus.Uploading, image.Status);
+    }
+
+    [Fact]
     public async Task AddImageAsync_AtCap_RejectsWithMessage_AndDoesNotAddAnEleventhImage()
     {
         var provider = new FakeBlogProvider();
@@ -343,7 +374,7 @@ public class ComposerViewModelTests
         await vm.AddImageAsync(CreateTempImageFile("eleventh.jpg"), "eleventh.jpg", "image/jpeg", CancellationToken.None);
 
         Assert.Equal(10, vm.Images.Count);
-        Assert.Equal("Up to 10 images per post.", vm.ErrorMessage);
+        Assert.Equal("Up to 10 images per post.", vm.AddImageErrorMessage);
     }
 
     [Fact]

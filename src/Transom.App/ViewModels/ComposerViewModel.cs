@@ -44,6 +44,9 @@ public sealed partial class ComposerViewModel : ObservableObject
     private string? _errorMessage;
 
     [ObservableProperty]
+    private string? _addImageErrorMessage;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PublishedUri))]
     [NotifyPropertyChangedFor(nameof(HasPublishedUri))]
     private string? _publishedUrl;
@@ -122,9 +125,11 @@ public sealed partial class ComposerViewModel : ObservableObject
 
     public async Task AddImageAsync(string localFileUri, string fileName, string contentType, CancellationToken cancellationToken)
     {
+        AddImageErrorMessage = null;
+
         if (Images.Count >= MaxImages)
         {
-            ErrorMessage = $"Up to {MaxImages} images per post.";
+            AddImageErrorMessage = $"Up to {MaxImages} images per post.";
             return;
         }
 
@@ -134,7 +139,7 @@ public sealed partial class ComposerViewModel : ObservableObject
         // ComposerImageViewModel, Task 7) without restructuring that ownership: cancelling the
         // token AddImageAsync was called with must actually cancel the upload it kicks off below,
         // the same way RemoveImage already cancels UploadCancellation directly.
-        cancellationToken.Register(() => image.UploadCancellation.Cancel());
+        using var registration = cancellationToken.Register(() => image.UploadCancellation.Cancel());
 
         Images.Add(image);
         PublishCommand.NotifyCanExecuteChanged();

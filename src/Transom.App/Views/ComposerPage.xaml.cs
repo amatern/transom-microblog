@@ -149,6 +149,8 @@ public sealed partial class ComposerPage : Page
             return;
         }
 
+        ViewModel.AddImageErrorMessage = null;
+
         using var readStream = await file.OpenStreamForReadAsync();
         ProcessedImage processed;
         try
@@ -162,7 +164,7 @@ public sealed partial class ComposerPage : Page
             // at the top of the call chain, so an uncaught exception here is fatal to the whole app
             // (CLAUDE.md Rule 6: never lose the user's draft). Surface it the same way every other
             // failure in this app is surfaced instead of propagating.
-            ViewModel.ErrorMessage = ComposerErrorMessages.Describe(ex);
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
             return;
         }
 
@@ -171,6 +173,8 @@ public sealed partial class ComposerPage : Page
 
     private async Task AddClipboardImageAsync(IRandomAccessStreamWithContentType stream, CancellationToken cancellationToken)
     {
+        ViewModel.AddImageErrorMessage = null;
+
         var contentType = string.IsNullOrEmpty(stream.ContentType) ? ImageContentTypes.Png : stream.ContentType;
         using var netStream = stream.AsStreamForRead();
         ProcessedImage processed;
@@ -180,7 +184,7 @@ public sealed partial class ComposerPage : Page
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ViewModel.ErrorMessage = ComposerErrorMessages.Describe(ex);
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
             return;
         }
 
