@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.Linq;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -15,6 +18,9 @@ public sealed partial class ComposerViewModel : ObservableObject
     /// <summary>SPEC.md §4.2: the Title field appears once the post exceeds Micro.blog's
     /// short/long post threshold.</summary>
     private const int TitleThreshold = 300;
+
+    /// <summary>SPEC.md §7: "Up to 10 images per post."</summary>
+    private const int MaxImages = 10;
 
     private readonly IBlogProvider _provider;
     private readonly IComposerSettings _settings;
@@ -46,6 +52,8 @@ public sealed partial class ComposerViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PublishSuccessTitle))]
     private bool _publishedAsDraft;
 
+    public ObservableCollection<ComposerImageViewModel> Images { get; } = [];
+
     public int CharacterCount => Text.Length;
 
     /// <summary>Compact "N/threshold" label for the character counter, e.g. "42/300".</summary>
@@ -75,7 +83,10 @@ public sealed partial class ComposerViewModel : ObservableObject
         IsSignedIn = credentialStore.TryGet(CredentialAccounts.Default) is not null;
     }
 
-    private bool CanPublish() => !IsPublishing && !string.IsNullOrWhiteSpace(Text) && IsSignedIn;
+    private bool CanPublish() => !IsPublishing
+        && !string.IsNullOrWhiteSpace(Text)
+        && IsSignedIn
+        && Images.All(image => image.Status == ComposerImageStatus.Uploaded);
 
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private async Task PublishAsync(CancellationToken cancellationToken)
@@ -87,7 +98,8 @@ public sealed partial class ComposerViewModel : ObservableObject
         try
         {
             var postAsDraft = _settings.PostAsDraft;
-            var draft = new PostDraft(Text, ShowTitleField ? Title : null, postAsDraft);
+            var images = Images.Select(image => new DraftImage(image.UploadedUrl!, image.AltText)).ToList();
+            var draft = new PostDraft(Text, ShowTitleField ? Title : null, postAsDraft, images);
             var result = await _provider.PublishAsync(draft, cancellationToken).ConfigureAwait(true);
 
             // SPEC.md §6.2: a draft response carries both `url` (the eventual public URL, which
@@ -96,6 +108,7 @@ public sealed partial class ComposerViewModel : ObservableObject
             PublishedUrl = postAsDraft && !string.IsNullOrEmpty(result.PreviewUrl) ? result.PreviewUrl : result.Url;
             Text = string.Empty;
             Title = string.Empty;
+            Images.Clear();
         }
         catch (Exception ex)
         {
@@ -104,6 +117,132 @@ public sealed partial class ComposerViewModel : ObservableObject
         finally
         {
             IsPublishing = false;
+        }
+    }
+
+    public async Task AddImageAsync(string localFileUri, string fileName, string contentType, CancellationToken cancellationToken)
+    {
+        if (Images.Count >= MaxImages)
+        {
+            ErrorMessage = $"Up to {MaxImages} images per post.";
+            return;
+        }
+
+        var image = new ComposerImageViewModel(localFileUri, fileName, contentType, UploadImageAsync, RemoveImage, MoveImageLeft, MoveImageRight);
+        Images.Add(image);
+        PublishCommand.NotifyCanExecuteChanged();
+        await UploadImageAsync(image, image.UploadCancellation.Token).ConfigureAwait(true);
+    }
+
+    private async Task UploadImageAsync(ComposerImageViewModel image, CancellationToken cancellationToken)
+    {
+        image.Status = ComposerImageStatus.Uploading;
+        image.ErrorMessage = null;
+        try
+        {
+            using var stream = new DeferredFileStream(new Uri(image.LocalFileUri).LocalPath);
+            var progress = new Progress<double>(value => image.UploadProgress = value);
+            var result = await _provider.UploadMediaAsync(stream, image.FileName, image.ContentType, progress, cancellationToken).ConfigureAwait(true);
+            image.SetUploaded(result.Url);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            image.SetFailed(ComposerErrorMessages.Describe(ex));
+        }
+
+        PublishCommand.NotifyCanExecuteChanged();
+    }
+
+    // Passed into each ComposerImageViewModel's constructor (Task 7) as its remove/move-left/
+    // move-right delegates. Not [RelayCommand]s themselves: nothing binds to these from
+    // ComposerViewModel directly — Task 9's XAML binds each tray tile to that image's own
+    // RemoveCommand/MoveLeftCommand/MoveRightCommand, which call back into these.
+    private void RemoveImage(ComposerImageViewModel image)
+    {
+        image.UploadCancellation.Cancel();
+        Images.Remove(image);
+        PublishCommand.NotifyCanExecuteChanged();
+    }
+
+    private void MoveImageLeft(ComposerImageViewModel image)
+    {
+        var index = Images.IndexOf(image);
+        if (index > 0)
+        {
+            Images.Move(index, index - 1);
+        }
+    }
+
+    private void MoveImageRight(ComposerImageViewModel image)
+    {
+        var index = Images.IndexOf(image);
+        if (index >= 0 && index < Images.Count - 1)
+        {
+            Images.Move(index, index + 1);
+        }
+    }
+
+    /// <summary>Wraps a local file path as a <see cref="Stream"/> without opening the underlying
+    /// <see cref="FileStream"/> until something actually reads from it, seeks it, or inspects its
+    /// length. <see cref="IBlogProvider.UploadMediaAsync"/> needs a real <see cref="Stream"/> up
+    /// front, but the real Micropub client (<c>MicropubClient.UploadMediaAsync</c>) only touches it
+    /// once it starts serializing the HTTP request body — so deferring the open changes nothing for
+    /// production (the file still must exist by then, and a missing/moved file still fails there,
+    /// naturally). It does mean a fake <see cref="IBlogProvider"/> that never reads the stream
+    /// (<c>FakeBlogProvider</c> in tests) never triggers disk access at all, so this view model's
+    /// upload-orchestration tests can use placeholder local paths without needing real files on
+    /// disk, and a fast-cancel-before-upload-starts path (Review Focus #4) never opens a file handle
+    /// it would just have to close again.</summary>
+    private sealed class DeferredFileStream : Stream
+    {
+        private readonly string _path;
+        private FileStream? _inner;
+
+        public DeferredFileStream(string path)
+        {
+            _path = path;
+        }
+
+        private FileStream Inner => _inner ??= File.OpenRead(_path);
+
+        public override bool CanRead => Inner.CanRead;
+
+        public override bool CanSeek => Inner.CanSeek;
+
+        public override bool CanWrite => false;
+
+        public override long Length => Inner.Length;
+
+        public override long Position
+        {
+            get => Inner.Position;
+            set => Inner.Position = value;
+        }
+
+        public override void Flush() => _inner?.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count) => Inner.Read(buffer, offset, count);
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => Inner.ReadAsync(buffer, offset, count, cancellationToken);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            => Inner.ReadAsync(buffer, cancellationToken);
+
+        public override long Seek(long offset, SeekOrigin origin) => Inner.Seek(offset, origin);
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

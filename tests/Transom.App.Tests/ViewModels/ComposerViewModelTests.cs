@@ -1,3 +1,6 @@
+using System.Linq;
+using System.Net;
+
 using Transom.App.Tests.TestDoubles;
 using Transom.App.ViewModels;
 using Transom.Core.Credentials;
@@ -233,6 +236,148 @@ public class ComposerViewModelTests
         };
 
         Assert.False(vm.PublishCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AddImageAsync_UploadsImmediately_AndMarksUploaded()
+    {
+        var provider = new FakeBlogProvider();
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
+
+        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+
+        var image = Assert.Single(vm.Images);
+        Assert.Equal(ComposerImageStatus.Uploaded, image.Status);
+        Assert.Equal("https://cdn.micro.blog/uploads/a.jpg", image.UploadedUrl);
+    }
+
+    [Fact]
+    public async Task AddImageAsync_UploadFails_MarksFailed_AndBlocksPublish()
+    {
+        var provider = new FakeBlogProvider
+        {
+            OnUploadMedia = (_, _) => throw new MicropubException(null, "No such host is known."),
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
+
+        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+
+        var image = Assert.Single(vm.Images);
+        Assert.Equal(ComposerImageStatus.Failed, image.Status);
+        Assert.Equal("You appear to be offline. Check your connection and try again.", image.ErrorMessage);
+        Assert.False(vm.PublishCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task RetryOnFailedImage_ReUploadsOnlyThatImage()
+    {
+        var attempt = 0;
+        var provider = new FakeBlogProvider
+        {
+            OnUploadMedia = (fileName, _) =>
+            {
+                attempt++;
+                if (fileName == "a.jpg" && attempt == 1)
+                {
+                    throw new MicropubException(null, "offline");
+                }
+
+                return Task.FromResult(new MediaItem($"https://cdn.micro.blog/uploads/{fileName}"));
+            },
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
+        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync("file:///C:/temp/b.jpg", "b.jpg", "image/jpeg", CancellationToken.None);
+        var failedImage = vm.Images.Single(i => i.FileName == "a.jpg");
+        var succeededImage = vm.Images.Single(i => i.FileName == "b.jpg");
+        Assert.Equal(ComposerImageStatus.Failed, failedImage.Status);
+        Assert.Equal(ComposerImageStatus.Uploaded, succeededImage.Status);
+
+        await failedImage.RetryCommand.ExecuteAsync(null);
+
+        Assert.Equal(ComposerImageStatus.Uploaded, failedImage.Status);
+        Assert.Equal(ComposerImageStatus.Uploaded, succeededImage.Status);
+        Assert.True(vm.PublishCommand.CanExecute(null) || string.IsNullOrWhiteSpace(vm.Text));
+    }
+
+    [Fact]
+    public async Task RemoveImage_CancelsUploadToken_AndUnblocksPublish()
+    {
+        var gate = new TaskCompletionSource();
+        var provider = new FakeBlogProvider
+        {
+            OnUploadMedia = async (fileName, ct) =>
+            {
+                await gate.Task.WaitAsync(ct);
+                return new MediaItem($"https://cdn.micro.blog/uploads/{fileName}");
+            },
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
+        var addTask = vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        var image = Assert.Single(vm.Images);
+        Assert.False(vm.PublishCommand.CanExecute(null));
+        Assert.True(image.UploadCancellation.Token.CanBeCanceled);
+
+        // This is exactly what Task 9's XAML does: the tray tile's own RemoveCommand, not a
+        // page-level command — ComposerViewModel never exposes remove/move as its own [RelayCommand]s
+        // (see the ComposerImageViewModel constructor delegates below).
+        image.RemoveCommand.Execute(null);
+        gate.SetResult();
+        await Task.WhenAny(addTask, Task.Delay(1000));
+
+        Assert.Empty(vm.Images);
+        Assert.True(image.UploadCancellation.IsCancellationRequested);
+        Assert.True(vm.PublishCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AddImageAsync_AtCap_RejectsWithMessage_AndDoesNotAddAnEleventhImage()
+    {
+        var provider = new FakeBlogProvider();
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
+        for (var i = 0; i < 10; i++)
+        {
+            await vm.AddImageAsync($"file:///C:/temp/{i}.jpg", $"{i}.jpg", "image/jpeg", CancellationToken.None);
+        }
+
+        await vm.AddImageAsync("file:///C:/temp/eleventh.jpg", "eleventh.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal(10, vm.Images.Count);
+        Assert.Equal("Up to 10 images per post.", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task PublishAsync_BuildsDraftImagesFromUploadedImages_InOrder()
+    {
+        var provider = new FakeBlogProvider();
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
+        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync("file:///C:/temp/b.jpg", "b.jpg", "image/jpeg", CancellationToken.None);
+        vm.Images[0].AltText = "First";
+        vm.Images[1].AltText = "Second";
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, provider.LastDraft!.Images.Count);
+        Assert.Equal("https://cdn.micro.blog/uploads/a.jpg", provider.LastDraft.Images[0].Url);
+        Assert.Equal("First", provider.LastDraft.Images[0].AltText);
+        Assert.Equal("https://cdn.micro.blog/uploads/b.jpg", provider.LastDraft.Images[1].Url);
+        Assert.Equal("Second", provider.LastDraft.Images[1].AltText);
+    }
+
+    [Fact]
+    public async Task PublishAsync_OnFailure_KeepsImages()
+    {
+        var provider = new FakeBlogProvider
+        {
+            OnPublish = (_, _) => throw new MicropubException(HttpStatusCode.InternalServerError, "Something went wrong."),
+        };
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
+        await vm.AddImageAsync("file:///C:/temp/a.jpg", "a.jpg", "image/jpeg", CancellationToken.None);
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.Images);
     }
 
     private static ComposerViewModel BuildViewModel() => new(new FakeBlogProvider(), new FakeComposerSettings(), SignedInCredentialStore());
