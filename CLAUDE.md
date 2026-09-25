@@ -50,6 +50,9 @@ and deploy fails with DEP0500.
 8. Nullable reference types on, warnings as errors in Core.
 9. Keep PRs small — one milestone task per PR, with tests. Update `SPEC.md` if a decision
    changes, and tick the box in `docs/milestones.md`.
+10. When an interface gains or changes a member, update every implementation — including test
+    doubles — in the same commit. CI builds the whole solution, so a half-updated interface
+    breaks the build for every task in between.
 
 ## Style
 - File-scoped namespaces, `var` when the type is obvious, records for DTOs/models.
