@@ -129,6 +129,13 @@ public sealed partial class ComposerViewModel : ObservableObject
         }
 
         var image = new ComposerImageViewModel(localFileUri, fileName, contentType, UploadImageAsync, RemoveImage, MoveImageLeft, MoveImageRight);
+
+        // Links the caller's token to this image's own CancellationTokenSource (owned by
+        // ComposerImageViewModel, Task 7) without restructuring that ownership: cancelling the
+        // token AddImageAsync was called with must actually cancel the upload it kicks off below,
+        // the same way RemoveImage already cancels UploadCancellation directly.
+        cancellationToken.Register(() => image.UploadCancellation.Cancel());
+
         Images.Add(image);
         PublishCommand.NotifyCanExecuteChanged();
         await UploadImageAsync(image, image.UploadCancellation.Token).ConfigureAwait(true);
