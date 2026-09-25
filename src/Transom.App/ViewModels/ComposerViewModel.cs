@@ -142,6 +142,7 @@ public sealed partial class ComposerViewModel : ObservableObject
         using var registration = cancellationToken.Register(() => image.UploadCancellation.Cancel());
 
         Images.Add(image);
+        RenumberImages();
         PublishCommand.NotifyCanExecuteChanged();
         await UploadImageAsync(image, image.UploadCancellation.Token).ConfigureAwait(true);
     }
@@ -173,6 +174,7 @@ public sealed partial class ComposerViewModel : ObservableObject
     {
         image.UploadCancellation.Cancel();
         Images.Remove(image);
+        RenumberImages();
         PublishCommand.NotifyCanExecuteChanged();
     }
 
@@ -182,6 +184,7 @@ public sealed partial class ComposerViewModel : ObservableObject
         if (index > 0)
         {
             Images.Move(index, index - 1);
+            RenumberImages();
         }
     }
 
@@ -191,6 +194,20 @@ public sealed partial class ComposerViewModel : ObservableObject
         if (index >= 0 && index < Images.Count - 1)
         {
             Images.Move(index, index + 1);
+            RenumberImages();
+        }
+    }
+
+    /// <summary>Keeps each tile's 1-based <see cref="ComposerImageViewModel.Position"/> and
+    /// <see cref="ComposerImageViewModel.TotalImages"/> current so the "Alt" button and warning
+    /// badge announce which image they're for (<see cref="ComposerImageViewModel.AltTextAutomationName"/>).
+    /// Called after every mutation of <see cref="Images"/> — add, remove, and both moves.</summary>
+    private void RenumberImages()
+    {
+        for (var i = 0; i < Images.Count; i++)
+        {
+            Images[i].Position = i + 1;
+            Images[i].TotalImages = Images.Count;
         }
     }
 }

@@ -40,8 +40,22 @@ public sealed partial class ComposerImageViewModel : ObservableObject
     [ObservableProperty]
     private string? _errorMessage;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AltTextAutomationName))]
+    private int _position;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AltTextAutomationName))]
+    private int _totalImages;
+
     /// <summary>SPEC.md §7: "empty alt text shows a gentle warning, never blocks."</summary>
     public bool ShowAltTextWarning => string.IsNullOrWhiteSpace(AltText);
+
+    /// <summary>Accessible name for the tray's "Alt" button and the warning badge, kept current via
+    /// <see cref="Position"/>/<see cref="TotalImages"/> so a screen reader user can tell which tile
+    /// they're about to edit (both are re-numbered by <c>ComposerViewModel.RenumberImages</c>
+    /// whenever the tray's contents change).</summary>
+    public string AltTextAutomationName => $"Edit alt text for image {Position} of {TotalImages}";
 
     public bool IsUploading => Status == ComposerImageStatus.Uploading;
 

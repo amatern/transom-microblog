@@ -397,6 +397,45 @@ public class ComposerViewModelTests
     }
 
     [Fact]
+    public async Task PublishAsync_UsesEditedAltText_NotTheOriginal()
+    {
+        var provider = new FakeBlogProvider();
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore()) { Text = "Hello" };
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+        vm.Images[0].AltText = "Original alt text";
+
+        // Simulates editing alt text after the fact — the "Alt" button/warning-badge re-open the same
+        // dialog and overwrite AltText the same way the initial add-time prompt does, so setting it
+        // twice here is an accurate simulation of an edit, not just an initial set.
+        vm.Images[0].AltText = "Edited alt text";
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        Assert.Equal("Edited alt text", provider.LastDraft!.Images[0].AltText);
+    }
+
+    [Fact]
+    public async Task AddImageAsync_AssignsPositionAndTotalImages_ToEachImage()
+    {
+        var provider = new FakeBlogProvider();
+        var vm = new ComposerViewModel(provider, new FakeComposerSettings(), SignedInCredentialStore());
+
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+        await vm.AddImageAsync(CreateTempImageFile("b.jpg"), "b.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal(1, vm.Images[0].Position);
+        Assert.Equal(2, vm.Images[1].Position);
+        Assert.Equal(2, vm.Images[0].TotalImages);
+        Assert.Equal(2, vm.Images[1].TotalImages);
+
+        vm.Images[0].RemoveCommand.Execute(null);
+
+        var remaining = Assert.Single(vm.Images);
+        Assert.Equal(1, remaining.Position);
+        Assert.Equal(1, remaining.TotalImages);
+    }
+
+    [Fact]
     public async Task PublishAsync_OnFailure_KeepsImages()
     {
         var provider = new FakeBlogProvider

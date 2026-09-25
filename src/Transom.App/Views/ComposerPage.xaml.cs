@@ -217,6 +217,7 @@ public sealed partial class ComposerPage : Page
         var textBox = new TextBox
         {
             PlaceholderText = "Describe this image for people using a screen reader",
+            Text = image.AltText ?? string.Empty,
         };
         AutomationProperties.SetName(textBox, "Alt text");
         var dialog = new ContentDialog
@@ -234,5 +235,20 @@ public sealed partial class ComposerPage : Page
         {
             image.AltText = textBox.Text;
         }
+    }
+
+    // Shared by the tray tile's "Alt" button and the warning-badge button (both live inside the
+    // ItemsRepeater's ItemTemplate, so `sender`'s DataContext is that tile's own
+    // ComposerImageViewModel — the standard WinUI pattern for a per-item button whose action needs
+    // the item, used here instead of a Command binding because opening a ContentDialog needs
+    // code-behind (view models can't reference WinUI types, CLAUDE.md Rule 5).
+    private async void EditAltTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not ComposerImageViewModel image)
+        {
+            return;
+        }
+
+        await PromptForAltTextAsync(image, CancellationToken.None);
     }
 }

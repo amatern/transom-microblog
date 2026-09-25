@@ -62,7 +62,7 @@
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="viewmodels:ComposerImageViewModel">
-                        <Grid Width="140" AutomationProperties.Name="{x:Bind FileName}">
+                        <Grid Width="180" AutomationProperties.Name="{x:Bind FileName}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="100" />
                                 <RowDefinition Height="Auto" />
@@ -72,17 +72,24 @@
                                 Source="{x:Bind LocalFileUri, Converter={StaticResource UrlToImageSourceConverter}}"
                                 Stretch="UniformToFill" />
                             <ProgressRing Grid.Row="0" IsActive="{x:Bind IsUploading, Mode=OneWay}" Width="24" Height="24" />
-                            <FontIcon
+                            <Button
                                 Grid.Row="0"
-                                Glyph="&#xE783;"
-                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
+                                Padding="2"
+                                MinWidth="0"
+                                Background="Transparent"
+                                BorderThickness="0"
                                 Visibility="{x:Bind ShowAltTextWarning, Mode=OneWay}"
-                                AutomationProperties.Name="Missing alt text" />
+                                AutomationProperties.Name="{x:Bind AltTextAutomationName, Mode=OneWay}"
+                                ToolTipService.ToolTip="Add alt text"
+                                Click="EditAltTextButton_Click">
+                                <FontIcon Glyph="&#xE783;" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                            </Button>
                             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button Padding="4" MinWidth="0" Content="&#xE76B;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move left" Command="{x:Bind MoveLeftCommand}" />
                                 <Button Padding="4" MinWidth="0" Content="&#xE76C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move right" Command="{x:Bind MoveRightCommand}" />
+                                <Button Padding="4" MinWidth="0" Content="Alt" AutomationProperties.Name="{x:Bind AltTextAutomationName, Mode=OneWay}" Click="EditAltTextButton_Click" />
                                 <Button Padding="4" MinWidth="0" Content="Retry" AutomationProperties.Name="Retry upload" Command="{x:Bind RetryCommand}" Visibility="{x:Bind IsFailed, Mode=OneWay}" />
                                 <Button Padding="4" MinWidth="0" Content="&#xE711;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Remove image" Command="{x:Bind RemoveCommand}" />
                             </StackPanel>
