@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
+using Transom.App.Services;
 using Transom.App.ViewModels;
 using Transom.Core.Media;
 
@@ -93,7 +94,7 @@ public sealed partial class ComposerPage : Page
         var files = await picker.PickMultipleFilesAsync();
         foreach (var file in files)
         {
-            await AddFileAsync(file);
+            await AddFileAsync(file, CancellationToken.None);
         }
     }
 
@@ -115,7 +116,7 @@ public sealed partial class ComposerPage : Page
         var items = await e.DataView.GetStorageItemsAsync();
         foreach (var file in items.OfType<StorageFile>())
         {
-            await AddFileAsync(file);
+            await AddFileAsync(file, CancellationToken.None);
         }
     }
 
@@ -128,7 +129,7 @@ public sealed partial class ComposerPage : Page
             var items = await content.GetStorageItemsAsync();
             foreach (var file in items.OfType<StorageFile>())
             {
-                await AddFileAsync(file);
+                await AddFileAsync(file, CancellationToken.None);
             }
         }
         else if (content.Contains(StandardDataFormats.Bitmap))
@@ -136,11 +137,11 @@ public sealed partial class ComposerPage : Page
             e.Handled = true;
             var bitmapRef = await content.GetBitmapAsync();
             using var stream = await bitmapRef.OpenReadAsync();
-            await AddClipboardImageAsync(stream);
+            await AddClipboardImageAsync(stream, CancellationToken.None);
         }
     }
 
-    private async Task AddFileAsync(StorageFile file)
+    private async Task AddFileAsync(StorageFile file, CancellationToken cancellationToken)
     {
         var contentType = ImageContentTypes.FromFileExtension(file.FileType);
         if (contentType is null)
@@ -149,25 +150,50 @@ public sealed partial class ComposerPage : Page
         }
 
         using var readStream = await file.OpenStreamForReadAsync();
-        var processed = await _imageProcessor.ProcessAsync(readStream, contentType, ImageProcessingOptions.Default, CancellationToken.None);
-        await AddProcessedImageAsync(processed);
+        ProcessedImage processed;
+        try
+        {
+            processed = await _imageProcessor.ProcessAsync(readStream, contentType, ImageProcessingOptions.Default, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // WicImageProcessor deliberately wraps WIC/codec failures (corrupt file, missing HEIC
+            // codec, etc.) into a friendly InvalidOperationException. This handler is `async void`
+            // at the top of the call chain, so an uncaught exception here is fatal to the whole app
+            // (CLAUDE.md Rule 6: never lose the user's draft). Surface it the same way every other
+            // failure in this app is surfaced instead of propagating.
+            ViewModel.ErrorMessage = ComposerErrorMessages.Describe(ex);
+            return;
+        }
+
+        await AddProcessedImageAsync(processed, cancellationToken);
     }
 
-    private async Task AddClipboardImageAsync(IRandomAccessStreamWithContentType stream)
+    private async Task AddClipboardImageAsync(IRandomAccessStreamWithContentType stream, CancellationToken cancellationToken)
     {
         var contentType = string.IsNullOrEmpty(stream.ContentType) ? ImageContentTypes.Png : stream.ContentType;
         using var netStream = stream.AsStreamForRead();
-        var processed = await _imageProcessor.ProcessAsync(netStream, contentType, ImageProcessingOptions.Default, CancellationToken.None);
-        await AddProcessedImageAsync(processed);
+        ProcessedImage processed;
+        try
+        {
+            processed = await _imageProcessor.ProcessAsync(netStream, contentType, ImageProcessingOptions.Default, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ViewModel.ErrorMessage = ComposerErrorMessages.Describe(ex);
+            return;
+        }
+
+        await AddProcessedImageAsync(processed, cancellationToken);
     }
 
-    private async Task AddProcessedImageAsync(ProcessedImage processed)
+    private async Task AddProcessedImageAsync(ProcessedImage processed, CancellationToken cancellationToken)
     {
         var folder = await ApplicationData.Current.TemporaryFolder.CreateFolderAsync("composer-images", CreationCollisionOption.OpenIfExists);
         var file = await folder.CreateFileAsync(processed.FileName, CreationCollisionOption.GenerateUniqueName);
         using (var destination = await file.OpenStreamForWriteAsync())
         {
-            await processed.Content.CopyToAsync(destination);
+            await processed.Content.CopyToAsync(destination, cancellationToken);
         }
 
         // AddImageAsync (Task 8) silently declines to add the image once the SPEC.md §7 10-image
@@ -175,14 +201,14 @@ public sealed partial class ComposerPage : Page
         // for alt text when an image actually landed in the tray — otherwise Images[^1] would be
         // the wrong (pre-existing) image and this would wrongly re-prompt for its alt text.
         var countBeforeAdd = ViewModel.Images.Count;
-        await ViewModel.AddImageAsync(new Uri(file.Path).AbsoluteUri, processed.FileName, processed.ContentType, CancellationToken.None);
+        await ViewModel.AddImageAsync(new Uri(file.Path).AbsoluteUri, processed.FileName, processed.ContentType, cancellationToken);
         if (ViewModel.Images.Count > countBeforeAdd)
         {
-            await PromptForAltTextAsync(ViewModel.Images[^1]);
+            await PromptForAltTextAsync(ViewModel.Images[^1], cancellationToken);
         }
     }
 
-    private async Task PromptForAltTextAsync(ComposerImageViewModel image)
+    private async Task PromptForAltTextAsync(ComposerImageViewModel image, CancellationToken cancellationToken)
     {
         var textBox = new TextBox
         {
@@ -199,7 +225,7 @@ public sealed partial class ComposerPage : Page
             XamlRoot = XamlRoot,
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await dialog.ShowAsync().AsTask(cancellationToken);
         if (result == ContentDialogResult.Primary)
         {
             image.AltText = textBox.Text;
