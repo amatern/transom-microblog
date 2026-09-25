@@ -143,13 +143,13 @@ public sealed partial class ComposerPage : Page
 
     private async Task AddFileAsync(StorageFile file, CancellationToken cancellationToken)
     {
+        ViewModel.AddImageErrorMessage = null;
+
         var contentType = ImageContentTypes.FromFileExtension(file.FileType);
         if (contentType is null)
         {
             return;
         }
-
-        ViewModel.AddImageErrorMessage = null;
 
         using var readStream = await file.OpenStreamForReadAsync();
         ProcessedImage processed;
