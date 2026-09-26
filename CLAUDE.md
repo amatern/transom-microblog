@@ -53,12 +53,21 @@ and deploy fails with DEP0500.
 10. When an interface gains or changes a member, update every implementation — including test
     doubles — in the same commit. CI builds the whole solution, so a half-updated interface
     breaks the build for every task in between.
+11. No silently swallowed failures on a user-triggered action. Any `catch` (or a defensive
+    early-return that stands in for one) either shows the error InfoBar or logs loudly — never
+    just `return`. A button that does nothing is worse than one that reports an error: it looks
+    fixed, it isn't, and nothing points back to why.
 
 ## Style
 - File-scoped namespaces, `var` when the type is obvious, records for DTOs/models.
 - XAML: use `x:Bind`, theme resources (no hard-coded colors), Fluent icons (`SymbolIcon`/`FontIcon`).
 - x:Bind never converts string→ImageSource/Uri. Use a converter that returns null for empty
   values. A bad binding shows up only at runtime, as ArgumentException "value".
+- x:Bind never sets `DataContext` on the elements it binds (that's a `{Binding}`-only mechanism).
+  A code-behind `Click` handler inside an `x:Bind`-only `DataTemplate` that reads
+  `((FrameworkElement)sender).DataContext` gets `null`, not the item — it compiles, and the
+  failure is a silent no-op, not an exception. Bind `Tag="{x:Bind}"` on the element and read
+  `.Tag` instead.
 - Public APIs in Core get XML doc comments.
 
 ## Commits
