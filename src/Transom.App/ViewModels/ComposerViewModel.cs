@@ -1,11 +1,11 @@
-using System.Net;
+using System.Collections.ObjectModel;
+using System.Linq;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using Transom.App.Services;
 using Transom.Core.Credentials;
-using Transom.Core.MicroBlog;
 using Transom.Core.Models;
 using Transom.Core.Providers;
 
@@ -18,6 +18,9 @@ public sealed partial class ComposerViewModel : ObservableObject
     /// <summary>SPEC.md §4.2: the Title field appears once the post exceeds Micro.blog's
     /// short/long post threshold.</summary>
     private const int TitleThreshold = 300;
+
+    /// <summary>SPEC.md §7: "Up to 10 images per post."</summary>
+    private const int MaxImages = 10;
 
     private readonly IBlogProvider _provider;
     private readonly IComposerSettings _settings;
@@ -41,6 +44,16 @@ public sealed partial class ComposerViewModel : ObservableObject
     private string? _errorMessage;
 
     [ObservableProperty]
+    private string? _addImageErrorMessage;
+
+    /// <summary>Surfaces a failure from editing an existing image's alt text (opening the dialog,
+    /// or the dialog itself throwing) — kept separate from <see cref="AddImageErrorMessage"/>
+    /// because the two failures are unrelated and share nothing but both being image-tray errors;
+    /// reusing one for the other would misattribute the error to the wrong InfoBar/title.</summary>
+    [ObservableProperty]
+    private string? _editImageErrorMessage;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PublishedUri))]
     [NotifyPropertyChangedFor(nameof(HasPublishedUri))]
     private string? _publishedUrl;
@@ -48,6 +61,8 @@ public sealed partial class ComposerViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PublishSuccessTitle))]
     private bool _publishedAsDraft;
+
+    public ObservableCollection<ComposerImageViewModel> Images { get; } = [];
 
     public int CharacterCount => Text.Length;
 
@@ -78,7 +93,10 @@ public sealed partial class ComposerViewModel : ObservableObject
         IsSignedIn = credentialStore.TryGet(CredentialAccounts.Default) is not null;
     }
 
-    private bool CanPublish() => !IsPublishing && !string.IsNullOrWhiteSpace(Text) && IsSignedIn;
+    private bool CanPublish() => !IsPublishing
+        && !string.IsNullOrWhiteSpace(Text)
+        && IsSignedIn
+        && Images.All(image => image.Status == ComposerImageStatus.Uploaded);
 
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private async Task PublishAsync(CancellationToken cancellationToken)
@@ -90,7 +108,8 @@ public sealed partial class ComposerViewModel : ObservableObject
         try
         {
             var postAsDraft = _settings.PostAsDraft;
-            var draft = new PostDraft(Text, ShowTitleField ? Title : null, postAsDraft);
+            var images = Images.Select(image => new DraftImage(image.UploadedUrl!, image.AltText)).ToList();
+            var draft = new PostDraft(Text, ShowTitleField ? Title : null, postAsDraft, images);
             var result = await _provider.PublishAsync(draft, cancellationToken).ConfigureAwait(true);
 
             // SPEC.md §6.2: a draft response carries both `url` (the eventual public URL, which
@@ -99,25 +118,103 @@ public sealed partial class ComposerViewModel : ObservableObject
             PublishedUrl = postAsDraft && !string.IsNullOrEmpty(result.PreviewUrl) ? result.PreviewUrl : result.Url;
             Text = string.Empty;
             Title = string.Empty;
-        }
-        catch (MicropubException ex) when (ex.StatusCode is null)
-        {
-            // No response ever came back (DNS failure, no connection, timeout) — MicropubClient
-            // wraps that into a MicropubException with a null StatusCode so it can't reach here as
-            // a raw HttpRequestException/TaskCanceledException and escape uncaught.
-            ErrorMessage = "You appear to be offline. Check your connection and try again.";
-        }
-        catch (MicropubException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            ErrorMessage = "Your app token was rejected. Paste a new one in Settings.";
+            Images.Clear();
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = ComposerErrorMessages.Describe(ex);
         }
         finally
         {
             IsPublishing = false;
+        }
+    }
+
+    public async Task AddImageAsync(string localFileUri, string fileName, string contentType, CancellationToken cancellationToken)
+    {
+        AddImageErrorMessage = null;
+
+        if (Images.Count >= MaxImages)
+        {
+            AddImageErrorMessage = $"Up to {MaxImages} images per post.";
+            return;
+        }
+
+        var image = new ComposerImageViewModel(localFileUri, fileName, contentType, UploadImageAsync, RemoveImage, MoveImageLeft, MoveImageRight);
+
+        // Links the caller's token to this image's own CancellationTokenSource (owned by
+        // ComposerImageViewModel, Task 7) without restructuring that ownership: cancelling the
+        // token AddImageAsync was called with must actually cancel the upload it kicks off below,
+        // the same way RemoveImage already cancels UploadCancellation directly.
+        using var registration = cancellationToken.Register(() => image.UploadCancellation.Cancel());
+
+        Images.Add(image);
+        RenumberImages();
+        PublishCommand.NotifyCanExecuteChanged();
+        await UploadImageAsync(image, image.UploadCancellation.Token).ConfigureAwait(true);
+    }
+
+    private async Task UploadImageAsync(ComposerImageViewModel image, CancellationToken cancellationToken)
+    {
+        image.Status = ComposerImageStatus.Uploading;
+        image.ErrorMessage = null;
+        try
+        {
+            using var stream = File.OpenRead(new Uri(image.LocalFileUri).LocalPath);
+            var progress = new Progress<double>(value => image.UploadProgress = value);
+            var result = await _provider.UploadMediaAsync(stream, image.FileName, image.ContentType, progress, cancellationToken).ConfigureAwait(true);
+            image.SetUploaded(result.Url);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            image.SetFailed(ComposerErrorMessages.Describe(ex));
+        }
+
+        PublishCommand.NotifyCanExecuteChanged();
+    }
+
+    // Passed into each ComposerImageViewModel's constructor (Task 7) as its remove/move-left/
+    // move-right delegates. Not [RelayCommand]s themselves: nothing binds to these from
+    // ComposerViewModel directly — Task 9's XAML binds each tray tile to that image's own
+    // RemoveCommand/MoveLeftCommand/MoveRightCommand, which call back into these.
+    private void RemoveImage(ComposerImageViewModel image)
+    {
+        image.UploadCancellation.Cancel();
+        Images.Remove(image);
+        RenumberImages();
+        PublishCommand.NotifyCanExecuteChanged();
+    }
+
+    private void MoveImageLeft(ComposerImageViewModel image)
+    {
+        var index = Images.IndexOf(image);
+        if (index > 0)
+        {
+            Images.Move(index, index - 1);
+            RenumberImages();
+        }
+    }
+
+    private void MoveImageRight(ComposerImageViewModel image)
+    {
+        var index = Images.IndexOf(image);
+        if (index >= 0 && index < Images.Count - 1)
+        {
+            Images.Move(index, index + 1);
+            RenumberImages();
+        }
+    }
+
+    /// <summary>Keeps each tile's 1-based <see cref="ComposerImageViewModel.Position"/> and
+    /// <see cref="ComposerImageViewModel.TotalImages"/> current so the "Alt" button and warning
+    /// badge announce which image they're for (<see cref="ComposerImageViewModel.AltTextAutomationName"/>).
+    /// Called after every mutation of <see cref="Images"/> — add, remove, and both moves.</summary>
+    private void RenumberImages()
+    {
+        for (var i = 0; i < Images.Count; i++)
+        {
+            Images[i].Position = i + 1;
+            Images[i].TotalImages = Images.Count;
         }
     }
 }
