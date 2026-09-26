@@ -46,6 +46,13 @@ public sealed partial class ComposerViewModel : ObservableObject
     [ObservableProperty]
     private string? _addImageErrorMessage;
 
+    /// <summary>Surfaces a failure from editing an existing image's alt text (opening the dialog,
+    /// or the dialog itself throwing) — kept separate from <see cref="AddImageErrorMessage"/>
+    /// because the two failures are unrelated and share nothing but both being image-tray errors;
+    /// reusing one for the other would misattribute the error to the wrong InfoBar/title.</summary>
+    [ObservableProperty]
+    private string? _editImageErrorMessage;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PublishedUri))]
     [NotifyPropertyChangedFor(nameof(HasPublishedUri))]

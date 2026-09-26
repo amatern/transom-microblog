@@ -148,6 +148,10 @@ public sealed partial class ComposerPage : Page
         var contentType = ImageContentTypes.FromFileExtension(file.FileType);
         if (contentType is null)
         {
+            // Reachable via drag-drop and clipboard paste, which don't filter extensions the way
+            // AddImageButton_Click's FileOpenPicker does (see its FileTypeFilter list). Per
+            // CLAUDE.md Rule 11, don't no-op silently here.
+            ViewModel.AddImageErrorMessage = "That file type isn't supported. Use JPEG, PNG, GIF, WebP, or HEIC.";
             return;
         }
 
@@ -247,14 +251,18 @@ public sealed partial class ComposerPage : Page
     // needs code-behind (view models can't reference WinUI types, CLAUDE.md Rule 5).
     private async void EditAltTextButton_Click(object sender, RoutedEventArgs e)
     {
+        ViewModel.EditImageErrorMessage = null;
+
         if (((FrameworkElement)sender).Tag is not ComposerImageViewModel image)
         {
             // Defensive: Tag is bound via x:Bind and should always resolve to the clicked tile's
             // image. If it somehow doesn't, don't fail silently — that's exactly the bug this
             // replaces (the old DataContext-based lookup silently no-opped instead of ever reaching
             // PromptForAltTextAsync, since x:Bind-only DataTemplates never populate DataContext;
-            // see CLAUDE.md's x:Bind/DataContext note and Rule 11 on silent failures).
-            ViewModel.AddImageErrorMessage = "Couldn't open alt text for that image. Please try again.";
+            // see CLAUDE.md's x:Bind/DataContext note and Rule 11 on silent failures). This is an
+            // edit-image failure, not an add-image one, so it uses EditImageErrorMessage, not
+            // AddImageErrorMessage — they're bound to separate InfoBars with separate titles.
+            ViewModel.EditImageErrorMessage = "Couldn't open alt text for that image. Please try again.";
             return;
         }
 
@@ -264,7 +272,7 @@ public sealed partial class ComposerPage : Page
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+            ViewModel.EditImageErrorMessage = ComposerErrorMessages.Describe(ex);
         }
     }
 }

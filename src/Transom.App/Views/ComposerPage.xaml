@@ -134,6 +134,12 @@
                 Message="{x:Bind ViewModel.AddImageErrorMessage, Mode=OneWay}" />
 
             <InfoBar
+                IsOpen="{x:Bind ViewModel.EditImageErrorMessage, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
+                Severity="Informational"
+                Title="Couldn't edit image"
+                Message="{x:Bind ViewModel.EditImageErrorMessage, Mode=OneWay}" />
+
+            <InfoBar
                 IsOpen="{x:Bind ViewModel.PublishedUrl, Mode=OneWay, Converter={StaticResource NullToBoolConverter}}"
                 Severity="Success"
                 Title="{x:Bind ViewModel.PublishSuccessTitle, Mode=OneWay}">
