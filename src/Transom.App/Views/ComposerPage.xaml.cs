@@ -238,17 +238,33 @@ public sealed partial class ComposerPage : Page
     }
 
     // Shared by the tray tile's "Alt" button and the warning-badge button (both live inside the
-    // ItemsRepeater's ItemTemplate, so `sender`'s DataContext is that tile's own
-    // ComposerImageViewModel — the standard WinUI pattern for a per-item button whose action needs
-    // the item, used here instead of a Command binding because opening a ContentDialog needs
-    // code-behind (view models can't reference WinUI types, CLAUDE.md Rule 5).
+    // ItemsRepeater's x:Bind-only ItemTemplate). x:Bind never sets DataContext on the elements it
+    // binds — that's a {Binding}-only mechanism — so reading sender's DataContext here always got
+    // null and this handler silently no-opped (see CLAUDE.md's x:Bind/DataContext note). Instead
+    // the XAML binds `Tag="{x:Bind}"` on both buttons, which assigns the tile's own
+    // ComposerImageViewModel to the plain Tag dependency property at compile time; read that
+    // instead. This is used here (rather than a Command binding) because opening a ContentDialog
+    // needs code-behind (view models can't reference WinUI types, CLAUDE.md Rule 5).
     private async void EditAltTextButton_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not ComposerImageViewModel image)
+        if (((FrameworkElement)sender).Tag is not ComposerImageViewModel image)
         {
+            // Defensive: Tag is bound via x:Bind and should always resolve to the clicked tile's
+            // image. If it somehow doesn't, don't fail silently — that's exactly the bug this
+            // replaces (the old DataContext-based lookup silently no-opped instead of ever reaching
+            // PromptForAltTextAsync, since x:Bind-only DataTemplates never populate DataContext;
+            // see CLAUDE.md's x:Bind/DataContext note and Rule 11 on silent failures).
+            ViewModel.AddImageErrorMessage = "Couldn't open alt text for that image. Please try again.";
             return;
         }
 
-        await PromptForAltTextAsync(image, CancellationToken.None);
+        try
+        {
+            await PromptForAltTextAsync(image, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+        }
     }
 }

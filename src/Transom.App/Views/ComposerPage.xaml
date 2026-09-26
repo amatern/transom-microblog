@@ -83,13 +83,14 @@
                                 Visibility="{x:Bind ShowAltTextWarning, Mode=OneWay}"
                                 AutomationProperties.Name="{x:Bind AltTextAutomationName, Mode=OneWay}"
                                 ToolTipService.ToolTip="Add alt text"
+                                Tag="{x:Bind}"
                                 Click="EditAltTextButton_Click">
                                 <FontIcon Glyph="&#xE783;" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
                             </Button>
                             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button Padding="4" MinWidth="0" Content="&#xE76B;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move left" Command="{x:Bind MoveLeftCommand}" />
                                 <Button Padding="4" MinWidth="0" Content="&#xE76C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Move right" Command="{x:Bind MoveRightCommand}" />
-                                <Button Padding="4" MinWidth="0" Content="Alt" AutomationProperties.Name="{x:Bind AltTextAutomationName, Mode=OneWay}" Click="EditAltTextButton_Click" />
+                                <Button Padding="4" MinWidth="0" Content="Alt" AutomationProperties.Name="{x:Bind AltTextAutomationName, Mode=OneWay}" Tag="{x:Bind}" Click="EditAltTextButton_Click" />
                                 <Button Padding="4" MinWidth="0" Content="Retry" AutomationProperties.Name="Retry upload" Command="{x:Bind RetryCommand}" Visibility="{x:Bind IsFailed, Mode=OneWay}" />
                                 <Button Padding="4" MinWidth="0" Content="&#xE711;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Remove image" Command="{x:Bind RemoveCommand}" />
                             </StackPanel>
