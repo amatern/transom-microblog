@@ -42,6 +42,13 @@ InfoBar instead of crashing the app; the 10-image cap holds and an 11th is refus
 draft published with both photos in the correct order and alt text intact. Test drafts created
 during verification were deleted from the account afterward.
 
+**Re-verified** (2026-09-27, after the post-review fixes on PR #5): removing an image mid-upload
+leaves the app running and the composed text intact (a debugger break on `TaskCanceledException`
+under F5 is expected; the exception is handled); a second alt-text prompt waits for the first to
+close instead of crashing; a failed upload shows its reason under the tile; clipboard paste still
+adds images; alt text is editable after add via the tile's Alt button and the warning badge; the
+tray holds up at 10 images and in a narrow window.
+
 ## M3 — Timeline (U4)
 - [ ] JSON Feed + `_microblog` models and `TimelineClient` (timeline, paging with `before_id`/`since_id`)
 - [ ] Spike: `HtmlToXamlConverter` vs WebView2 — record decision in SPEC §12
