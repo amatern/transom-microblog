@@ -9,6 +9,7 @@ using Transom.App.Services;
 using Transom.App.ViewModels;
 using Transom.Core.Credentials;
 using Transom.Core.Http;
+using Transom.Core.Media;
 using Transom.Core.MicroBlog;
 using Transom.Core.Providers;
 using Transom.Core.Providers.MicroBlog;
@@ -41,6 +42,7 @@ internal static class HostBuilderExtensions
 
             services.AddSingleton<ICredentialStore, PasswordVaultCredentialStore>();
             services.AddSingleton<IComposerSettings, LocalSettingsComposerSettings>();
+            services.AddSingleton<IImageProcessor, WicImageProcessor>();
             services.AddSingleton<AccountStateService>();
             services.AddTransient<IBlogProvider>(sp => new MicroBlogProvider(
                 sp.GetRequiredService<MicropubClient>(),

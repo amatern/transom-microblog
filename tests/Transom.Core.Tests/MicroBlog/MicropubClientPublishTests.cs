@@ -126,4 +126,47 @@ public class MicropubClientPublishTests
 
         Assert.Null(ex.StatusCode);
     }
+
+    [Fact]
+    public async Task PublishAsync_WithTwoPhotos_SendsPhotoAndAltInMatchingOrder()
+    {
+        var handler = new FixtureHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Created);
+            response.Headers.Location = new Uri("https://example.micro.blog/p.html");
+            return response;
+        });
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+        var images = new[]
+        {
+            new DraftImage("https://cdn.micro.blog/uploads/one.jpg", "A red bicycle"),
+            new DraftImage("https://cdn.micro.blog/uploads/two.jpg", null),
+        };
+
+        await client.PublishAsync("test-token", new PostDraft("Two photos", null, PostAsDraft: false, images), CancellationToken.None);
+
+        var form = await handler.LastRequest!.Content!.ReadAsStringAsync();
+        Assert.Equal(
+            "h=entry&content=Two+photos&photo%5B%5D=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Fone.jpg&mp-photo-alt%5B%5D=A+red+bicycle&photo%5B%5D=https%3A%2F%2Fcdn.micro.blog%2Fuploads%2Ftwo.jpg&mp-photo-alt%5B%5D=",
+            form);
+    }
+
+    [Fact]
+    public async Task PublishAsync_NoImages_FormIsUnchangedFromBeforeM2()
+    {
+        // Review Focus #3: adding Images must not add stray empty photo[]/mp-photo-alt[] fields
+        // to a text-only post.
+        var handler = new FixtureHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Created);
+            response.Headers.Location = new Uri("https://example.micro.blog/p.html");
+            return response;
+        });
+        var client = new MicropubClient(new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") });
+
+        await client.PublishAsync("test-token", new PostDraft("Just some text", null, PostAsDraft: false), CancellationToken.None);
+
+        var form = await handler.LastRequest!.Content!.ReadAsStringAsync();
+        Assert.DoesNotContain("photo", form);
+    }
 }

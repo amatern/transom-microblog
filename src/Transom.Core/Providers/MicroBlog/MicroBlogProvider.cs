@@ -1,5 +1,3 @@
-using System.Linq;
-
 using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
@@ -13,6 +11,7 @@ public sealed class MicroBlogProvider : IBlogProvider
     private readonly MicropubClient _micropubClient;
     private readonly ICredentialStore _credentialStore;
     private readonly string _accountId;
+    private string? _cachedMediaEndpoint;
 
     public string Id => "microblog";
 
@@ -29,9 +28,30 @@ public sealed class MicroBlogProvider : IBlogProvider
         return WithDefaultMarked(config.Destinations);
     }
 
-    /// <summary>SPEC.md §6.2: a real account's <c>q=config</c> flags its default blog via
-    /// <c>microblog-default</c> on one destination, but that flag isn't guaranteed to be present —
-    /// when no destination is flagged, the first one is treated as the default instead.</summary>
+    public async Task<MediaItem> UploadMediaAsync(Stream data, string fileName, string contentType, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var token = RequireToken();
+        var mediaEndpoint = await GetMediaEndpointAsync(token, cancellationToken).ConfigureAwait(false);
+        return await _micropubClient.UploadMediaAsync(token, mediaEndpoint, data, fileName, contentType, progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> GetMediaEndpointAsync(string token, CancellationToken cancellationToken)
+    {
+        if (_cachedMediaEndpoint is { } cached)
+        {
+            return cached;
+        }
+
+        var config = await _micropubClient.GetConfigAsync(token, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(config.MediaEndpoint))
+        {
+            throw new MicropubException(null, "This Micro.blog account has no media endpoint configured.");
+        }
+
+        _cachedMediaEndpoint = config.MediaEndpoint;
+        return _cachedMediaEndpoint;
+    }
+
     private static IReadOnlyList<BlogInfo> WithDefaultMarked(IReadOnlyList<BlogInfo> destinations)
     {
         if (destinations.Count == 0 || destinations.Any(blog => blog.IsDefault))

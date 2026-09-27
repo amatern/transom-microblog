@@ -70,8 +70,9 @@ Behaviours:
   automatically when the text exceeds 300 characters (Micro.blog's short/long post threshold)
   and can be shown manually.
 - Optional Markdown **Preview** toggle (Markdig → rendered).
-- Image tray under the text: thumbnails, per-image **alt text** (prompted on add; warning if
-  empty), remove, reorder.
+- Image tray under the text: thumbnails, per-image **alt text** (prompted on add and editable
+  afterward via a button on the tile and the missing-alt-text warning badge itself; warning if
+  empty, never blocking), remove, reorder.
 - Category picker (loaded from the blog), blog picker (if >1), **Save draft**,
   **Publish** (Ctrl+Enter).
 - Upload progress per image; posting is blocked until uploads complete.

@@ -26,6 +26,13 @@ public partial class App : Application
     /// </summary>
     public static IHost Host { get; private set; } = null!;
 
+    /// <summary>The app's single top-level window, set in <see cref="OnLaunched"/> before it is
+    /// activated. <c>FileOpenPicker</c> and any dialog that needs an owner window require this
+    /// window's HWND in a packaged desktop app — see <c>ComposerPage.AddImageButton_Click</c>.
+    /// Nullable only because it is unset before <see cref="OnLaunched"/> runs; no page can be
+    /// shown before that, so by the time any code reads it, it is always set.</summary>
+    internal static Window? MainWindowInstance { get; private set; }
+
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
     /// executed, and as such is the logical equivalent of main() or WinMain().
@@ -38,7 +45,8 @@ public partial class App : Application
 
     /// <summary>Logs unhandled exceptions before the default crash behavior runs. Does not set
     /// <see cref="Microsoft.UI.Xaml.UnhandledExceptionEventArgs.Handled"/> — this only adds visibility, it never
-    /// swallows the exception.</summary>
+    /// swallows the exception. Deliberate, see CLAUDE.md Rule 12: failures are caught in the handler
+    /// that started the work, where they can be reported and state is still known.</summary>
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
 #if DEBUG
@@ -58,6 +66,7 @@ public partial class App : Application
             .Build();
 
         _window = new MainWindow();
+        MainWindowInstance = _window;
         _window.Activate();
     }
 }

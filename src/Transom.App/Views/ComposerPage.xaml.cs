@@ -1,12 +1,22 @@
+using System.Linq;
+using System.Runtime.InteropServices.WindowsRuntime;
+
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
+using Transom.App.Services;
 using Transom.App.ViewModels;
+using Transom.Core.Media;
 
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI.Core;
 
@@ -14,6 +24,14 @@ namespace Transom.App.Views;
 
 public sealed partial class ComposerPage : Page
 {
+    private readonly IImageProcessor _imageProcessor = App.Host.Services.GetRequiredService<IImageProcessor>();
+    private readonly ILogger<ComposerPage> _logger = App.Host.Services.GetRequiredService<ILogger<ComposerPage>>();
+
+    // WinUI allows one open ContentDialog at a time; ShowAsync on a second throws. Two alt-text
+    // prompts can overlap for real — a slow upload finishing while a later, faster image's prompt
+    // is still open — so every prompt waits its turn here.
+    private readonly SemaphoreSlim _dialogGate = new(1, 1);
+
     public ComposerViewModel ViewModel { get; }
 
     public ComposerPage()
@@ -68,5 +86,237 @@ public sealed partial class ComposerPage : Page
         var package = new DataPackage();
         package.SetText(uri.AbsoluteUri);
         Clipboard.SetContent(package);
+    }
+
+    // The three add-image entry points below are `async void` event handlers: anything that
+    // escapes them goes to App.OnUnhandledException and the app goes down with the user's text
+    // (CLAUDE.md Rule 6). Each one runs its whole body through this guard. Removing a tile
+    // mid-upload is not an exception by the time it gets here — ComposerViewModel treats it as a
+    // normal outcome — so an OperationCanceledException reaching this point is unexpected and is
+    // reported like any other failure (CLAUDE.md Rule 11), not swallowed.
+    private async Task GuardAddImageAsync(Func<Task> addImages)
+    {
+        try
+        {
+            await addImages();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Adding an image failed");
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+        }
+    }
+
+    private async void AddImageButton_Click(object sender, RoutedEventArgs e) => await GuardAddImageAsync(async () =>
+    {
+        var picker = new FileOpenPicker();
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+        foreach (var extension in new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic" })
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
+
+        var files = await picker.PickMultipleFilesAsync();
+        foreach (var file in files)
+        {
+            await AddFileAsync(file, CancellationToken.None);
+        }
+    });
+
+    private void ComposerRoot_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        }
+    }
+
+    private async void ComposerRoot_Drop(object sender, DragEventArgs e) => await GuardAddImageAsync(async () =>
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        var items = await e.DataView.GetStorageItemsAsync();
+        foreach (var file in items.OfType<StorageFile>())
+        {
+            await AddFileAsync(file, CancellationToken.None);
+        }
+    });
+
+    // e.Handled must be set before the first await to stop the TextBox's own paste. The guard runs
+    // this delegate synchronously up to its first await, so it still is.
+    private async void BodyBox_Paste(object sender, TextControlPasteEventArgs e) => await GuardAddImageAsync(async () =>
+    {
+        var content = Clipboard.GetContent();
+        if (content.Contains(StandardDataFormats.StorageItems))
+        {
+            e.Handled = true;
+            var items = await content.GetStorageItemsAsync();
+            foreach (var file in items.OfType<StorageFile>())
+            {
+                await AddFileAsync(file, CancellationToken.None);
+            }
+        }
+        else if (content.Contains(StandardDataFormats.Bitmap))
+        {
+            e.Handled = true;
+            var bitmapRef = await content.GetBitmapAsync();
+            using var stream = await bitmapRef.OpenReadAsync();
+            await AddClipboardImageAsync(stream, CancellationToken.None);
+        }
+    });
+
+    private async Task AddFileAsync(StorageFile file, CancellationToken cancellationToken)
+    {
+        ViewModel.AddImageErrorMessage = null;
+
+        var contentType = ImageContentTypes.FromFileExtension(file.FileType);
+        if (contentType is null)
+        {
+            // Reachable via drag-drop and clipboard paste, which don't filter extensions the way
+            // AddImageButton_Click's FileOpenPicker does (see its FileTypeFilter list). Per
+            // CLAUDE.md Rule 11, don't no-op silently here.
+            ViewModel.AddImageErrorMessage = "That file type isn't supported. Use JPEG, PNG, GIF, WebP, or HEIC.";
+            return;
+        }
+
+        using var readStream = await file.OpenStreamForReadAsync();
+        ProcessedImage processed;
+        try
+        {
+            processed = await _imageProcessor.ProcessAsync(readStream, contentType, ImageProcessingOptions.Default, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // WicImageProcessor deliberately wraps WIC/codec failures (corrupt file, missing HEIC
+            // codec, etc.) into a friendly InvalidOperationException. This handler is `async void`
+            // at the top of the call chain, so an uncaught exception here is fatal to the whole app
+            // (CLAUDE.md Rule 6: never lose the user's draft). Surface it the same way every other
+            // failure in this app is surfaced instead of propagating.
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+            return;
+        }
+
+        await AddProcessedImageAsync(processed, cancellationToken);
+    }
+
+    private async Task AddClipboardImageAsync(IRandomAccessStreamWithContentType stream, CancellationToken cancellationToken)
+    {
+        ViewModel.AddImageErrorMessage = null;
+
+        var contentType = string.IsNullOrEmpty(stream.ContentType) ? ImageContentTypes.Png : stream.ContentType;
+        using var netStream = stream.AsStreamForRead();
+        ProcessedImage processed;
+        try
+        {
+            processed = await _imageProcessor.ProcessAsync(netStream, contentType, ImageProcessingOptions.Default, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+            return;
+        }
+
+        await AddProcessedImageAsync(processed, cancellationToken);
+    }
+
+    private async Task AddProcessedImageAsync(ProcessedImage processed, CancellationToken cancellationToken)
+    {
+        var folder = await ApplicationData.Current.TemporaryFolder.CreateFolderAsync("composer-images", CreationCollisionOption.OpenIfExists);
+        var file = await folder.CreateFileAsync(processed.FileName, CreationCollisionOption.GenerateUniqueName);
+        using (var destination = await file.OpenStreamForWriteAsync())
+        {
+            await processed.Content.CopyToAsync(destination, cancellationToken);
+        }
+
+        // AddImageAsync returns null when the image never landed (the SPEC.md §7 10-image cap) or
+        // the user removed it mid-upload; only prompt for alt text on the image it actually added.
+        // Comparing Images.Count and prompting for Images[^1] picked the wrong tile, or none,
+        // whenever another tile was removed during the upload.
+        var added = await ViewModel.AddImageAsync(new Uri(file.Path).AbsoluteUri, processed.FileName, processed.ContentType, cancellationToken);
+        if (added is not null)
+        {
+            await PromptForAltTextAsync(added, cancellationToken);
+        }
+    }
+
+    private async Task PromptForAltTextAsync(ComposerImageViewModel image, CancellationToken cancellationToken)
+    {
+        var textBox = new TextBox
+        {
+            PlaceholderText = "Describe this image for people using a screen reader",
+            Text = image.AltText ?? string.Empty,
+        };
+        AutomationProperties.SetName(textBox, "Alt text");
+        var dialog = new ContentDialog
+        {
+            Title = "Add alt text",
+            Content = textBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Skip",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        await _dialogGate.WaitAsync(cancellationToken);
+        try
+        {
+            // The image may have been removed while this prompt waited behind an earlier one.
+            if (!ViewModel.Images.Contains(image))
+            {
+                return;
+            }
+
+            var result = await dialog.ShowAsync().AsTask(cancellationToken);
+            if (result == ContentDialogResult.Primary)
+            {
+                image.AltText = textBox.Text;
+            }
+        }
+        finally
+        {
+            _dialogGate.Release();
+        }
+    }
+
+    // Shared by the tray tile's "Alt" button and the warning-badge button (both live inside the
+    // ItemsRepeater's x:Bind-only ItemTemplate). x:Bind never sets DataContext on the elements it
+    // binds — that's a {Binding}-only mechanism — so reading sender's DataContext here always got
+    // null and this handler silently no-opped (see CLAUDE.md's x:Bind/DataContext note). Instead
+    // the XAML binds `Tag="{x:Bind}"` on both buttons, which assigns the tile's own
+    // ComposerImageViewModel to the plain Tag dependency property at compile time; read that
+    // instead. This is used here (rather than a Command binding) because opening a ContentDialog
+    // needs code-behind (view models can't reference WinUI types, CLAUDE.md Rule 5).
+    private async void EditAltTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.EditImageErrorMessage = null;
+
+        if (((FrameworkElement)sender).Tag is not ComposerImageViewModel image)
+        {
+            // Defensive: Tag is bound via x:Bind and should always resolve to the clicked tile's
+            // image. If it somehow doesn't, don't fail silently — that's exactly the bug this
+            // replaces (the old DataContext-based lookup silently no-opped instead of ever reaching
+            // PromptForAltTextAsync, since x:Bind-only DataTemplates never populate DataContext;
+            // see CLAUDE.md's x:Bind/DataContext note and Rule 11 on silent failures). This is an
+            // edit-image failure, not an add-image one, so it uses EditImageErrorMessage, not
+            // AddImageErrorMessage — they're bound to separate InfoBars with separate titles.
+            ViewModel.EditImageErrorMessage = "Couldn't open alt text for that image. Please try again.";
+            return;
+        }
+
+        try
+        {
+            await PromptForAltTextAsync(image, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // No OperationCanceledException exemption: the token is None, so a cancellation here
+            // would be a bug, and an exempted one would escape this async void handler and crash.
+            _logger.LogError(ex, "Editing alt text failed");
+            ViewModel.EditImageErrorMessage = ComposerErrorMessages.Describe(ex);
+        }
     }
 }
