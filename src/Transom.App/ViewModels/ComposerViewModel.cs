@@ -130,14 +130,17 @@ public sealed partial class ComposerViewModel : ObservableObject
         }
     }
 
-    public async Task AddImageAsync(string localFileUri, string fileName, string contentType, CancellationToken cancellationToken)
+    /// <summary>Adds an image to the tray and uploads it. Returns the image once its upload has
+    /// settled (uploaded or failed), or null if it never landed (the 10-image cap) or the user
+    /// removed it mid-upload — so the caller prompts for alt text on the right tile, or not at all.</summary>
+    public async Task<ComposerImageViewModel?> AddImageAsync(string localFileUri, string fileName, string contentType, CancellationToken cancellationToken)
     {
         AddImageErrorMessage = null;
 
         if (Images.Count >= MaxImages)
         {
             AddImageErrorMessage = $"Up to {MaxImages} images per post.";
-            return;
+            return null;
         }
 
         var image = new ComposerImageViewModel(localFileUri, fileName, contentType, UploadImageAsync, RemoveImage, MoveImageLeft, MoveImageRight);
@@ -152,6 +155,7 @@ public sealed partial class ComposerViewModel : ObservableObject
         RenumberImages();
         PublishCommand.NotifyCanExecuteChanged();
         await UploadImageAsync(image, image.UploadCancellation.Token).ConfigureAwait(true);
+        return Images.Contains(image) ? image : null;
     }
 
     private async Task UploadImageAsync(ComposerImageViewModel image, CancellationToken cancellationToken)
@@ -164,6 +168,15 @@ public sealed partial class ComposerViewModel : ObservableObject
             var progress = new Progress<double>(value => image.UploadProgress = value);
             var result = await _provider.UploadMediaAsync(stream, image.FileName, image.ContentType, progress, cancellationToken).ConfigureAwait(true);
             image.SetUploaded(result.Url);
+        }
+        catch (OperationCanceledException) when (!Images.Contains(image))
+        {
+            // The user removed this tile mid-upload (RemoveImage cancels UploadCancellation). That's
+            // an expected outcome, not a failure: the tile is already gone and there's nothing to
+            // report. Letting it propagate is what crashed the app — it escaped ComposerPage's async
+            // void add-image handlers (and RetryCommand) into App.OnUnhandledException. A
+            // cancellation while the image is still in the tray (the caller's own token) still
+            // propagates, as any cancelled async method's would.
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -179,8 +192,11 @@ public sealed partial class ComposerViewModel : ObservableObject
     // RemoveCommand/MoveLeftCommand/MoveRightCommand, which call back into these.
     private void RemoveImage(ComposerImageViewModel image)
     {
-        image.UploadCancellation.Cancel();
+        // Remove before cancelling: Cancel() can run the upload's continuation inline, and
+        // UploadImageAsync tells "removed mid-upload" (expected, silent) from any other
+        // cancellation by whether the image is still in Images.
         Images.Remove(image);
+        image.UploadCancellation.Cancel();
         RenumberImages();
         PublishCommand.NotifyCanExecuteChanged();
     }

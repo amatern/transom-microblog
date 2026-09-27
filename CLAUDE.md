@@ -57,6 +57,17 @@ and deploy fails with DEP0500.
     early-return that stands in for one) either shows the error InfoBar or logs loudly — never
     just `return`. A button that does nothing is worse than one that reports an error: it looks
     fixed, it isn't, and nothing points back to why.
+12. **`App.OnUnhandledException` is a last-resort logger. It never sets `Handled = true`.**
+    By the time an exception gets there, nothing knows what it interrupted, so "handling" it
+    would keep running on half-updated state: a tile stuck Uploading, a dialog gate still held.
+    It would also hide the bug, the same failure Rule 11 forbids at app scale. Catch at the
+    entry point instead. Every `async void` handler and every `[RelayCommand]` async body wraps
+    its whole body, from the first line, in a `try` that reports through an InfoBar and the
+    logger. Handle *expected* cancellation (e.g. removing an image mid-upload) as a normal
+    outcome where the code knows it's expected, not by exempting `OperationCanceledException`
+    in the top-level catch. An exempted cancellation escapes `async void` and crashes the app.
+    A test that `await`s through `Task.WhenAny` never observes the exception; await the task
+    itself.
 
 ## Style
 - File-scoped namespaces, `var` when the type is obvious, records for DTOs/models.

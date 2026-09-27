@@ -6,6 +6,7 @@ using Transom.App.ViewModels;
 using Transom.Core.Credentials;
 using Transom.Core.MicroBlog;
 using Transom.Core.Models;
+using Transom.Core.Providers.MicroBlog;
 
 namespace Transom.App.Tests.ViewModels;
 
@@ -323,11 +324,100 @@ public class ComposerViewModelTests
         // (see the ComposerImageViewModel constructor delegates below).
         image.RemoveCommand.Execute(null);
         gate.SetResult();
-        await Task.WhenAny(addTask, Task.Delay(1000));
+
+        // Awaited directly, not via Task.WhenAny: WhenAny never observes addTask's exception, which
+        // is how this test used to pass while the TaskCanceledException it raised went on to crash
+        // the app from ComposerPage's async void handlers.
+        Assert.Null(await addTask.WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Empty(vm.Images);
         Assert.True(image.UploadCancellation.IsCancellationRequested);
         Assert.True(vm.PublishCommand.CanExecute(null));
+    }
+
+    // Issue #4 follow-up (prompt 22): removing a tile mid-upload crashed the app. Driven through the
+    // real MicroBlogProvider → MicropubClient → HttpClient chain, so the cancellation arrives as the
+    // TaskCanceledException HttpClient really throws, not one a fake provider chose to throw.
+    [Fact]
+    public async Task RemoveImage_MidUpload_ThroughRealProvider_CompletesQuietly_AndLeavesTheRestUntouched()
+    {
+        var handler = new BlockingUploadHttpMessageHandler();
+        var vm = new ComposerViewModel(RealProvider(handler), new FakeComposerSettings(), SignedInCredentialStore())
+        {
+            Text = "Everything I typed",
+        };
+        var addTask = vm.AddImageAsync(CreateTempImageFile("big.jpg"), "big.jpg", "image/jpeg", CancellationToken.None);
+        await handler.UploadBlocked.WaitAsync(TimeSpan.FromSeconds(5));
+        var image = Assert.Single(vm.Images);
+        Assert.Equal(ComposerImageStatus.Uploading, image.Status);
+
+        image.RemoveCommand.Execute(null);
+
+        // The whole point: this must complete normally. A faulted task here is what escaped
+        // ComposerPage's async void handlers into App.OnUnhandledException and took the app down.
+        Assert.Null(await addTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Empty(vm.Images);
+        Assert.Equal("Everything I typed", vm.Text);
+        Assert.Null(vm.AddImageErrorMessage);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Null(image.ErrorMessage);
+        Assert.NotEqual(ComposerImageStatus.Failed, image.Status);
+        Assert.True(vm.PublishCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task RemoveImage_MidUpload_LeavesOtherImagesUntouched()
+    {
+        var handler = new BlockingUploadHttpMessageHandler(
+            BlockingUploadHttpMessageHandler.UploadOutcome.Succeed,
+            BlockingUploadHttpMessageHandler.UploadOutcome.Block);
+        var vm = new ComposerViewModel(RealProvider(handler), new FakeComposerSettings(), SignedInCredentialStore());
+        var kept = await vm.AddImageAsync(CreateTempImageFile("kept.jpg"), "kept.jpg", "image/jpeg", CancellationToken.None);
+        Assert.NotNull(kept);
+        kept.AltText = "A lighthouse";
+        var keptUrl = kept.UploadedUrl;
+
+        var addTask = vm.AddImageAsync(CreateTempImageFile("big.jpg"), "big.jpg", "image/jpeg", CancellationToken.None);
+        await handler.UploadBlocked.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.Images[1].RemoveCommand.Execute(null);
+
+        Assert.Null(await addTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Same(kept, Assert.Single(vm.Images));
+        Assert.Equal(ComposerImageStatus.Uploaded, kept.Status);
+        Assert.Equal(keptUrl, kept.UploadedUrl);
+        Assert.Equal("A lighthouse", kept.AltText);
+        Assert.Equal(1, kept.Position);
+        Assert.Equal(1, kept.TotalImages);
+    }
+
+    [Fact]
+    public async Task RemoveImage_DuringRetry_ThroughRealProvider_CompletesQuietly()
+    {
+        var handler = new BlockingUploadHttpMessageHandler(BlockingUploadHttpMessageHandler.UploadOutcome.Fail);
+        var vm = new ComposerViewModel(RealProvider(handler), new FakeComposerSettings(), SignedInCredentialStore());
+        await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+        var image = Assert.Single(vm.Images);
+        Assert.Equal(ComposerImageStatus.Failed, image.Status);
+
+        var retryTask = image.RetryCommand.ExecuteAsync(null);
+        await handler.UploadBlocked.WaitAsync(TimeSpan.FromSeconds(5));
+        image.RemoveCommand.Execute(null);
+
+        // RetryCommand is an AsyncRelayCommand: an exception out of it is re-raised on the UI
+        // thread, the same crash as the async void path.
+        await retryTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Empty(vm.Images);
+        Assert.Null(vm.AddImageErrorMessage);
+    }
+
+    [Fact]
+    public async Task AddImageAsync_ReturnsTheAddedImage_WhenItIsStillInTheTray()
+    {
+        var vm = BuildViewModel();
+
+        var added = await vm.AddImageAsync(CreateTempImageFile("a.jpg"), "a.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Same(Assert.Single(vm.Images), added);
     }
 
     [Fact]
@@ -464,6 +554,12 @@ public class ComposerViewModelTests
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}-{fileName}");
         File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF]);
         return new Uri(path).AbsoluteUri;
+    }
+
+    private static MicroBlogProvider RealProvider(HttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://micro.blog") };
+        return new MicroBlogProvider(new MicropubClient(httpClient), SignedInCredentialStore(), CredentialAccounts.Default);
     }
 
     private static InMemoryCredentialStore SignedInCredentialStore()

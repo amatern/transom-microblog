@@ -2,6 +2,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -24,6 +25,12 @@ namespace Transom.App.Views;
 public sealed partial class ComposerPage : Page
 {
     private readonly IImageProcessor _imageProcessor = App.Host.Services.GetRequiredService<IImageProcessor>();
+    private readonly ILogger<ComposerPage> _logger = App.Host.Services.GetRequiredService<ILogger<ComposerPage>>();
+
+    // WinUI allows one open ContentDialog at a time; ShowAsync on a second throws. Two alt-text
+    // prompts can overlap for real — a slow upload finishing while a later, faster image's prompt
+    // is still open — so every prompt waits its turn here.
+    private readonly SemaphoreSlim _dialogGate = new(1, 1);
 
     public ComposerViewModel ViewModel { get; }
 
@@ -81,7 +88,26 @@ public sealed partial class ComposerPage : Page
         Clipboard.SetContent(package);
     }
 
-    private async void AddImageButton_Click(object sender, RoutedEventArgs e)
+    // The three add-image entry points below are `async void` event handlers: anything that
+    // escapes them goes to App.OnUnhandledException and the app goes down with the user's text
+    // (CLAUDE.md Rule 6). Each one runs its whole body through this guard. Removing a tile
+    // mid-upload is not an exception by the time it gets here — ComposerViewModel treats it as a
+    // normal outcome — so an OperationCanceledException reaching this point is unexpected and is
+    // reported like any other failure (CLAUDE.md Rule 11), not swallowed.
+    private async Task GuardAddImageAsync(Func<Task> addImages)
+    {
+        try
+        {
+            await addImages();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Adding an image failed");
+            ViewModel.AddImageErrorMessage = ComposerErrorMessages.Describe(ex);
+        }
+    }
+
+    private async void AddImageButton_Click(object sender, RoutedEventArgs e) => await GuardAddImageAsync(async () =>
     {
         var picker = new FileOpenPicker();
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance);
@@ -96,7 +122,7 @@ public sealed partial class ComposerPage : Page
         {
             await AddFileAsync(file, CancellationToken.None);
         }
-    }
+    });
 
     private void ComposerRoot_DragOver(object sender, DragEventArgs e)
     {
@@ -106,7 +132,7 @@ public sealed partial class ComposerPage : Page
         }
     }
 
-    private async void ComposerRoot_Drop(object sender, DragEventArgs e)
+    private async void ComposerRoot_Drop(object sender, DragEventArgs e) => await GuardAddImageAsync(async () =>
     {
         if (!e.DataView.Contains(StandardDataFormats.StorageItems))
         {
@@ -118,9 +144,11 @@ public sealed partial class ComposerPage : Page
         {
             await AddFileAsync(file, CancellationToken.None);
         }
-    }
+    });
 
-    private async void BodyBox_Paste(object sender, TextControlPasteEventArgs e)
+    // e.Handled must be set before the first await to stop the TextBox's own paste. The guard runs
+    // this delegate synchronously up to its first await, so it still is.
+    private async void BodyBox_Paste(object sender, TextControlPasteEventArgs e) => await GuardAddImageAsync(async () =>
     {
         var content = Clipboard.GetContent();
         if (content.Contains(StandardDataFormats.StorageItems))
@@ -139,7 +167,7 @@ public sealed partial class ComposerPage : Page
             using var stream = await bitmapRef.OpenReadAsync();
             await AddClipboardImageAsync(stream, CancellationToken.None);
         }
-    }
+    });
 
     private async Task AddFileAsync(StorageFile file, CancellationToken cancellationToken)
     {
@@ -204,15 +232,14 @@ public sealed partial class ComposerPage : Page
             await processed.Content.CopyToAsync(destination, cancellationToken);
         }
 
-        // AddImageAsync (Task 8) silently declines to add the image once the SPEC.md §7 10-image
-        // cap is hit (it sets ErrorMessage and returns without touching Images), so only prompt
-        // for alt text when an image actually landed in the tray — otherwise Images[^1] would be
-        // the wrong (pre-existing) image and this would wrongly re-prompt for its alt text.
-        var countBeforeAdd = ViewModel.Images.Count;
-        await ViewModel.AddImageAsync(new Uri(file.Path).AbsoluteUri, processed.FileName, processed.ContentType, cancellationToken);
-        if (ViewModel.Images.Count > countBeforeAdd)
+        // AddImageAsync returns null when the image never landed (the SPEC.md §7 10-image cap) or
+        // the user removed it mid-upload; only prompt for alt text on the image it actually added.
+        // Comparing Images.Count and prompting for Images[^1] picked the wrong tile, or none,
+        // whenever another tile was removed during the upload.
+        var added = await ViewModel.AddImageAsync(new Uri(file.Path).AbsoluteUri, processed.FileName, processed.ContentType, cancellationToken);
+        if (added is not null)
         {
-            await PromptForAltTextAsync(ViewModel.Images[^1], cancellationToken);
+            await PromptForAltTextAsync(added, cancellationToken);
         }
     }
 
@@ -234,10 +261,24 @@ public sealed partial class ComposerPage : Page
             XamlRoot = XamlRoot,
         };
 
-        var result = await dialog.ShowAsync().AsTask(cancellationToken);
-        if (result == ContentDialogResult.Primary)
+        await _dialogGate.WaitAsync(cancellationToken);
+        try
         {
-            image.AltText = textBox.Text;
+            // The image may have been removed while this prompt waited behind an earlier one.
+            if (!ViewModel.Images.Contains(image))
+            {
+                return;
+            }
+
+            var result = await dialog.ShowAsync().AsTask(cancellationToken);
+            if (result == ContentDialogResult.Primary)
+            {
+                image.AltText = textBox.Text;
+            }
+        }
+        finally
+        {
+            _dialogGate.Release();
         }
     }
 
@@ -270,8 +311,11 @@ public sealed partial class ComposerPage : Page
         {
             await PromptForAltTextAsync(image, CancellationToken.None);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
+            // No OperationCanceledException exemption: the token is None, so a cancellation here
+            // would be a bug, and an exempted one would escape this async void handler and crash.
+            _logger.LogError(ex, "Editing alt text failed");
             ViewModel.EditImageErrorMessage = ComposerErrorMessages.Describe(ex);
         }
     }

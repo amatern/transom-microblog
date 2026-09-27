@@ -45,7 +45,8 @@ public partial class App : Application
 
     /// <summary>Logs unhandled exceptions before the default crash behavior runs. Does not set
     /// <see cref="Microsoft.UI.Xaml.UnhandledExceptionEventArgs.Handled"/> — this only adds visibility, it never
-    /// swallows the exception.</summary>
+    /// swallows the exception. Deliberate, see CLAUDE.md Rule 12: failures are caught in the handler
+    /// that started the work, where they can be reported and state is still known.</summary>
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
 #if DEBUG
