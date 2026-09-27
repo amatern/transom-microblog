@@ -31,6 +31,8 @@ public sealed partial class ComposerImageViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsUploading))]
     [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(FailureText))]
+    [NotifyPropertyChangedFor(nameof(TileAutomationName))]
     [NotifyCanExecuteChangedFor(nameof(RetryCommand))]
     private ComposerImageStatus _status = ComposerImageStatus.Pending;
 
@@ -38,6 +40,8 @@ public sealed partial class ComposerImageViewModel : ObservableObject
     private double _uploadProgress;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FailureText))]
+    [NotifyPropertyChangedFor(nameof(TileAutomationName))]
     private string? _errorMessage;
 
     [ObservableProperty]
@@ -56,6 +60,16 @@ public sealed partial class ComposerImageViewModel : ObservableObject
     /// they're about to edit (both are re-numbered by <c>ComposerViewModel.RenumberImages</c>
     /// whenever the tray's contents change).</summary>
     public string AltTextAutomationName => $"Edit alt text for image {Position} of {TotalImages}";
+
+    /// <summary>Why the upload failed, shown under the tile; empty unless <see cref="IsFailed"/>.
+    /// Never null, so the tile's TextBlock can x:Bind it directly.</summary>
+    public string FailureText => IsFailed ? ErrorMessage ?? string.Empty : string.Empty;
+
+    /// <summary>The tile's accessible name: the file name, plus the failure reason when the upload
+    /// failed, so a screen reader hears why without having to find the text under the tile.</summary>
+    public string TileAutomationName => IsFailed && !string.IsNullOrEmpty(ErrorMessage)
+        ? $"{FileName}, upload failed: {ErrorMessage}"
+        : FileName;
 
     public bool IsUploading => Status == ComposerImageStatus.Uploading;
 

@@ -92,4 +92,32 @@ public class ComposerImageViewModelTests
 
         Assert.Same(image, moved);
     }
+
+    [Fact]
+    public void SetFailed_PutsTheReasonInTheTileAccessibleName()
+    {
+        var image = Build();
+        var changed = new List<string?>();
+        image.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        image.SetFailed("You appear to be offline. Check your connection and try again.");
+
+        Assert.Equal("photo.jpg, upload failed: You appear to be offline. Check your connection and try again.", image.TileAutomationName);
+        Assert.Contains(nameof(ComposerImageViewModel.TileAutomationName), changed);
+        Assert.Equal("You appear to be offline. Check your connection and try again.", image.FailureText);
+    }
+
+    [Fact]
+    public void TileAccessibleName_IsJustTheFileName_UnlessFailed()
+    {
+        var image = Build();
+        Assert.Equal("photo.jpg", image.TileAutomationName);
+        Assert.Equal(string.Empty, image.FailureText);
+
+        image.SetFailed("Upload failed on the server.");
+        image.SetUploaded("https://cdn.micro.blog/uploads/photo.jpg");
+
+        Assert.Equal("photo.jpg", image.TileAutomationName);
+        Assert.Equal(string.Empty, image.FailureText);
+    }
 }

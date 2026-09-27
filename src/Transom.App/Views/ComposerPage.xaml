@@ -62,9 +62,10 @@
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="viewmodels:ComposerImageViewModel">
-                        <Grid Width="180" AutomationProperties.Name="{x:Bind FileName}">
+                        <Grid Width="180" AutomationProperties.Name="{x:Bind TileAutomationName, Mode=OneWay}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="100" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Image
@@ -94,6 +95,20 @@
                                 <Button Padding="4" MinWidth="0" Content="Retry" AutomationProperties.Name="Retry upload" Command="{x:Bind RetryCommand}" Visibility="{x:Bind IsFailed, Mode=OneWay}" />
                                 <Button Padding="4" MinWidth="0" Content="&#xE711;" FontFamily="{ThemeResource SymbolThemeFontFamily}" AutomationProperties.Name="Remove image" Command="{x:Bind RemoveCommand}" />
                             </StackPanel>
+                            <!-- Why the upload failed. Wraps within the tile's 180px, capped at three
+                                 lines; the tooltip carries anything longer, and the full reason is
+                                 also in the tile's accessible name (TileAutomationName). -->
+                            <TextBlock
+                                Grid.Row="2"
+                                Margin="4,2,4,0"
+                                Style="{ThemeResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextTrimming="CharacterEllipsis"
+                                MaxLines="3"
+                                Text="{x:Bind FailureText, Mode=OneWay}"
+                                ToolTipService.ToolTip="{x:Bind FailureText, Mode=OneWay}"
+                                Visibility="{x:Bind IsFailed, Mode=OneWay}" />
                         </Grid>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
